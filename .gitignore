@@ -1,0 +1,40 @@
+archive/
+
+# IDE / editor
+.vscode/
+.DS_Store
+*.code-workspace
+
+# Claude Code
+/.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environment / secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Virtual environments
+.venv/
+venv/
+
+# Training artifacts
+*.pt
+*.bin
+*.safetensors
+*.ckpt
+results/
+checkpoints/
+logs/
+wandb/
+
+# OS
+Thumbs.db
