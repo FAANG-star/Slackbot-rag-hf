@@ -44,7 +44,7 @@ class MessageHandler:
                 data = json.loads(line)
                 self.handle(data["message"], data["sandbox_name"])
             except Exception:
-                traceback.print_exc(file=sys.stdout)
+                traceback.print_exc(file=sys.stderr)
                 print("Error processing message", flush=True)
             print(END_TURN, flush=True)
 
@@ -88,7 +88,7 @@ class MessageHandler:
         memory = get_memory(sandbox_name, llm=self.llm.model)
         workflow = create_workflow(self.indexer, self.llm)
 
-        print("Thinking...", flush=True)
+        print("Searching...", file=sys.stderr, flush=True)
 
         async def _run():
             return await workflow.run(user_msg=msg, memory=memory, max_iterations=10)

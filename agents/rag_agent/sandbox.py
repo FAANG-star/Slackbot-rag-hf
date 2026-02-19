@@ -28,7 +28,7 @@ sandbox_image = (
     )
     # Models download to volume at runtime (cached across restarts)
     .add_local_dir(str(RAG_AGENT_DIR), "/agent", copy=True)
-    .env({"IMAGE_VERSION": "7"})  # bump to force image rebuild
+    .env({"IMAGE_VERSION": "8"})  # bump to force image rebuild
 )
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -82,10 +83,10 @@ def create_workflow(indexer: Indexer, llm: LLM) -> AgentWorkflow:
         if not indexer.has_index():
             return "No documents indexed yet. Ask the user to upload files and run reindex."
 
-        print(f"[SEARCH] Querying index: {query!r}", flush=True)
+        print(f"[SEARCH] Querying index: {query!r}", file=sys.stderr, flush=True)
         retriever = indexer.index.as_retriever(similarity_top_k=TOP_K)
         nodes = retriever.retrieve(query)
-        print(f"[SEARCH] Retrieved {len(nodes)} chunks", flush=True)
+        print(f"[SEARCH] Retrieved {len(nodes)} chunks", file=sys.stderr, flush=True)
 
         if not nodes:
             return "No relevant documents found for this query."
@@ -119,6 +120,6 @@ def create_workflow(indexer: Indexer, llm: LLM) -> AgentWorkflow:
         tools=[search_tool, code_tool],
         llm=llm.model,
         system_prompt=SYSTEM_PROMPT,
-        verbose=True,
+        verbose=False,
     )
     return AgentWorkflow(agents=[react_agent])
