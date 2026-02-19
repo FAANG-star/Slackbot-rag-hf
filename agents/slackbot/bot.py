@@ -1,15 +1,16 @@
-"""SlackBot — composes dependencies and sets up slack-bolt handlers."""
+"""SlackBot — sets up slack-bolt handlers, delegates to injected router."""
+
+from __future__ import annotations
 
 import os
 import re
 import threading
+from typing import TYPE_CHECKING
 
-from agents.infra.shared import rag_vol
-from agents.ml_agent.client import MlClient
-from agents.rag_agent.client import RagClient
+from .services.router import MessageContext
 
-from .file_manager import FileManager
-from .router import MessageContext, MessageRouter
+if TYPE_CHECKING:
+    from .services.container import ServiceContainer
 
 
 class SlackBot:
@@ -19,10 +20,8 @@ class SlackBot:
         {"title": "ML training", "message": "hf: Help me fine-tune a model on HuggingFace"},
     ]
 
-    def __init__(self):
-        self._router = MessageRouter(
-            rag=RagClient(), ml=MlClient(), files=FileManager(volume=rag_vol),
-        )
+    def __init__(self, container: ServiceContainer):
+        self._router = container.router
 
     def create_fastapi_app(self):
         from fastapi import FastAPI, Request

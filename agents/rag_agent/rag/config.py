@@ -11,7 +11,7 @@ MANIFEST_PATH = CHROMA_DIR / "manifest.json"
 
 # --- Models ---
 EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"  # 335M params, 1024-dim, top MTEB
-LLM_MODEL = "Qwen/Qwen2.5-7B-Instruct"  # 4-bit via bitsandbytes, ~4GB on A10G
+LLM_MODEL = "Qwen/Qwen2.5-14B-Instruct"  # 4-bit via bitsandbytes, ~8GB on A10G
 
 # --- Chunking ---
 CHUNK_SIZE = 512

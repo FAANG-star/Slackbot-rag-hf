@@ -16,6 +16,7 @@ import asyncio
 import json
 import shutil
 import sys
+import time
 import traceback
 from pathlib import Path
 
@@ -86,15 +87,18 @@ class MessageHandler:
         shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
 
         memory = get_memory(sandbox_name, llm=self.llm.model)
-        workflow = create_workflow(self.indexer, self.llm)
+        workflow, stats = create_workflow(self.indexer, self.llm)
 
         print("Searching...", file=sys.stderr, flush=True)
 
         async def _run():
             return await workflow.run(user_msg=msg, memory=memory, max_iterations=10)
 
+        t0 = time.monotonic()
         response = asyncio.run(_run())
-        print(str(response), flush=True)
+        elapsed = time.monotonic() - t0
+
+        print(str(response) + stats.format(elapsed), flush=True)
 
         for path in list_output_files():
             print(f"[OUTPUT_FILE:{path}]", flush=True)

@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import modal
-modal.enable_output()
 
 from agents.infra.shared import app, rag_vol
 
@@ -28,7 +27,7 @@ sandbox_image = (
     )
     # Models download to volume at runtime (cached across restarts)
     .add_local_dir(str(RAG_AGENT_DIR), "/agent", copy=True)
-    .env({"IMAGE_VERSION": "8"})  # bump to force image rebuild
+    .env({"IMAGE_VERSION": "21"})  # bump to force image rebuild
 )
 
 
