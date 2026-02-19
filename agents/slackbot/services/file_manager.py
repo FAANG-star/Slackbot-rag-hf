@@ -3,6 +3,7 @@
 import os
 import threading
 import urllib.request
+import zipfile
 from pathlib import Path
 
 import modal
@@ -30,8 +31,15 @@ class FileManager:
                 with urllib.request.urlopen(req, timeout=120) as resp:
                     content = resp.read()
                 filename = f.get("name", f["id"])
-                (self._docs_dir / filename).write_bytes(content)
-                saved.append(filename)
+                dest = self._docs_dir / filename
+                dest.write_bytes(content)
+                if zipfile.is_zipfile(dest):
+                    with zipfile.ZipFile(dest) as zf:
+                        zf.extractall(self._docs_dir)
+                    dest.unlink()
+                    saved.append(f"{filename} (extracted)")
+                else:
+                    saved.append(filename)
             self._volume.commit()
             return saved
 

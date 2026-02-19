@@ -11,23 +11,28 @@ RAG_AGENT_DIR = Path(__file__).parent
 SANDBOX_NAME = "rag-agent"
 
 sandbox_image = (
-    modal.Image.debian_slim(python_version="3.11")
-    .apt_install("git", "curl")
-    .pip_install("torch")
-    .pip_install(
+    modal.Image.from_registry("nvidia/cuda:12.8.0-devel-ubuntu22.04", add_python="3.12")
+    .entrypoint([])
+    .uv_pip_install(
+        "vllm==0.13.0",
         "llama-index-core",
         "llama-index-vector-stores-chroma",
         "llama-index-embeddings-huggingface",
-        "llama-index-llms-huggingface",
+        "llama-index-llms-vllm",
         "llama-index-readers-file",
-        "bitsandbytes",
-        "transformers>=4.44", "accelerate", "sentence-transformers>=3.0",
-        "pypdf", "python-docx",
-        "pandas", "openpyxl", "matplotlib",
+        "transformers>=4.44",
+        "sentence-transformers>=3.0",
+        "pypdf",
+        "python-docx",
+        "pandas",
+        "openpyxl",
+        "matplotlib",
     )
+    .run_commands("python -c 'from vllm import LLM; from llama_index.llms.vllm import Vllm; print(\"vllm OK\")'")
+    .run_commands("python -c 'from llama_index.core.agent.workflow import AgentWorkflow, ReActAgent; from chromadb import PersistentClient; print(\"llama-index OK\")'")
     # Models download to volume at runtime (cached across restarts)
     .add_local_dir(str(RAG_AGENT_DIR), "/agent", copy=True)
-    .env({"IMAGE_VERSION": "21"})  # bump to force image rebuild
+    .env({"IMAGE_VERSION": "32"})  # bump to force image rebuild
 )
 
 

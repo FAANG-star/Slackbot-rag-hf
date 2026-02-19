@@ -108,7 +108,7 @@ class SearchStats:
 
 
 def create_workflow(indexer: Indexer, llm: LLM) -> tuple[AgentWorkflow, SearchStats]:
-    """Create an AgentWorkflow with a ReActAgent + search/code tools."""
+    """Create an AgentWorkflow with a ReActAgent + search/code/list tools."""
     stats = SearchStats()
 
     def search_documents(query: str) -> str:

@@ -1,0 +1,33 @@
+display_information:
+  name: Modal Sandbox
+  description: AI agent with local RAG and ML training on Modal GPUs
+  background_color: "#1a1a2e"
+features:
+  assistant_view:
+    enabled: true
+  bot_user:
+    display_name: Modal Sandbox
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read
+      - assistant:write
+      - chat:write
+      - files:read
+      - files:write
+      - im:history
+      - im:read
+      - im:write
+settings:
+  event_subscriptions:
+    # Replace with your Modal app URL after deploying
+    request_url: https://YOUR_MODAL_APP_URL.modal.run/
+    bot_events:
+      - app_mention
+      - message.im
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

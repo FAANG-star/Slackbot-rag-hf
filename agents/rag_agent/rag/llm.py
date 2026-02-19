@@ -1,8 +1,12 @@
-"""Local LLM — HuggingFaceLLM wrapper for generation."""
+"""Local LLM — vLLM wrapper for generation."""
 
-import torch
-from llama_index.llms.huggingface import HuggingFaceLLM
-from transformers import BitsAndBytesConfig
+import asyncio
+from functools import partial
+from typing import Any, Sequence
+
+from llama_index.llms.vllm import Vllm
+from llama_index.core.llms import ChatMessage, ChatResponse
+from transformers import AutoTokenizer
 
 from .config import LLM_MODEL
 
@@ -23,20 +27,52 @@ SYSTEM_PROMPT = (
     "- Be concise. Cite sources from search results."
 )
 
-_bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.float16,
-)
+
+class _AsyncVllm(Vllm):
+    """Vllm with async methods via thread executor (base Vllm only implements sync)."""
+
+    async def achat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> ChatResponse:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, partial(self.chat, messages, **kwargs))
+
+    async def astream_chat(self, messages: Sequence[ChatMessage], **kwargs: Any):
+        resp = await self.achat(messages, **kwargs)
+
+        async def _gen():
+            yield resp
+
+        return _gen()
 
 
 class LLM:
     def __init__(self, model_name: str = LLM_MODEL):
-        self.model = HuggingFaceLLM(
-            model_name=model_name,
-            tokenizer_name=model_name,
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+        def messages_to_prompt(messages):
+            dicts = [{"role": m.role.value, "content": m.content} for m in messages]
+            return tokenizer.apply_chat_template(
+                dicts, tokenize=False, add_generation_prompt=True
+            )
+
+        def completion_to_prompt(completion):
+            return tokenizer.apply_chat_template(
+                [{"role": "user", "content": completion}],
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+
+        self.model = _AsyncVllm(
+            model=model_name,
             max_new_tokens=4096,
-            device_map="auto",
-            model_kwargs={"quantization_config": _bnb_config},
-            generate_kwargs={"temperature": 0.7, "top_p": 0.9},
+            temperature=0.7,
+            top_p=0.9,
+            dtype="auto",
+            download_dir="/data/hf-cache",
+            vllm_kwargs={
+                "gpu_memory_utilization": 0.85,
+                "quantization": "awq_marlin",
+                "max_model_len": 8192,
+            },
+            messages_to_prompt=messages_to_prompt,
+            completion_to_prompt=completion_to_prompt,
         )
