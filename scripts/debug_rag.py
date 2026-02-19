@@ -68,6 +68,7 @@ def main(test: str = ""):
 
     # Create fresh sandbox
     sb = modal.Sandbox.create(
+        "sleep", "infinity",
         app=app,
         image=sandbox_image,
         workdir="/agent",

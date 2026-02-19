@@ -18,7 +18,6 @@ sandbox_image = (
         "llama-index-core",
         "llama-index-vector-stores-chroma",
         "llama-index-embeddings-huggingface",
-        "llama-index-llms-vllm",
         "llama-index-readers-file",
         "transformers>=4.44",
         "sentence-transformers>=3.0",
@@ -28,11 +27,11 @@ sandbox_image = (
         "openpyxl",
         "matplotlib",
     )
-    .run_commands("python -c 'from vllm import LLM; from llama_index.llms.vllm import Vllm; print(\"vllm OK\")'")
+    .run_commands("python -c 'from vllm import LLM, SamplingParams; print(\"vllm OK\")'")
     .run_commands("python -c 'from llama_index.core.agent.workflow import AgentWorkflow, ReActAgent; from chromadb import PersistentClient; print(\"llama-index OK\")'")
     # Models download to volume at runtime (cached across restarts)
     .add_local_dir(str(RAG_AGENT_DIR), "/agent", copy=True)
-    .env({"IMAGE_VERSION": "32"})  # bump to force image rebuild
+    .env({"IMAGE_VERSION": "33"})  # bump to force image rebuild
 )
 
 
@@ -48,6 +47,7 @@ def get_sandbox() -> modal.Sandbox:
         return modal.Sandbox.from_name(app_name=app.name, name=SANDBOX_NAME)
     except modal.exception.NotFoundError:
         return modal.Sandbox.create(
+            "sleep", "infinity",
             app=app,
             image=sandbox_image,
             workdir="/agent",

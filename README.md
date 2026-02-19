@@ -1,6 +1,6 @@
 ## TL;DR
 
-You can incorporate agentic AI into your workflows without sending data to a third-party service. Advances in open-source models and GPU infrastructure make it easier than ever to deploy custom agents that help you make sense of huge amounts of data without sacrificing privacy.
+Agentic AI doesn't have risk your privacy. Open-source models and GPU infrastructure are making it easier to deploy custom agents that help you make sense of huge amounts of data without sacrificing privacy.
 
 A Slack bot connected to two secure AI agents:
 
@@ -8,13 +8,16 @@ A Slack bot connected to two secure AI agents:
 
 2. **ML agent** — a Claude agent that trains and runs HuggingFace models on a GPU sandbox, without ever being exposed to your API keys.
 
-No idle compute costs. Tagging the bot cold-starts a GPU on Modal's serverless infrastructure.
+Plus, there are no idle compute costs. Tagging the bot cold-starts a GPU quickly thanks to Modal's infrastructure.
 
 - [Why This Exists](#why-this-exists)
 - [Features](#features)
 - [Architecture](#architecture)
 - [Setup](#setup)
 - [Demo](#demo)
+  - [RAG: Enron Email Corpus](#rag-enron-email-corpus)
+  - [ML Training](#ml-training)
+  - [Debugging](#debugging)
 - [Credits](#credits)
 
 ---

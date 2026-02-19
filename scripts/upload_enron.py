@@ -53,9 +53,11 @@ def main():
 
         with rag_vol.batch_upload(force=True) as batch:
             for filepath in email_files:
-                # Preserve user/folder structure: maildir/user/folder/file -> rag/docs/enron/user/folder/file
+                # Flatten into /rag/docs/ so the indexer picks them up
+                # (Manifest.scan only does a shallow iterdir on DOCS_DIR)
                 rel = os.path.relpath(filepath, maildir)
-                batch.put_file(filepath, f"/rag/docs/enron/{rel}")
+                flat_name = rel.replace(os.sep, "_")
+                batch.put_file(filepath, f"/rag/docs/{flat_name}")
 
-        print(f"Uploaded {len(email_files):,} emails to sandbox-rag volume at /rag/docs/enron/")
-        print("(maps to /data/rag/docs/enron/ inside the sandbox)")
+        print(f"Uploaded {len(email_files):,} emails to sandbox-rag volume at /rag/docs/")
+        print("(maps to /data/rag/docs/ inside the sandbox)")

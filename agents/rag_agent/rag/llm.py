@@ -1,12 +1,18 @@
-"""Local LLM — vLLM wrapper for generation."""
+"""Local LLM — direct vLLM adapter for LlamaIndex."""
 
 import asyncio
 from functools import partial
-from typing import Any, Sequence
+from typing import Any, AsyncGenerator, Generator, Sequence
 
-from llama_index.llms.vllm import Vllm
-from llama_index.core.llms import ChatMessage, ChatResponse
-from transformers import AutoTokenizer
+from llama_index.core.llms import (
+    LLM as LlamaIndexLLM,
+    LLMMetadata,
+    ChatMessage,
+    ChatResponse,
+    CompletionResponse,
+    MessageRole,
+)
+from llama_index.core.bridge.pydantic import Field, PrivateAttr
 
 from .config import LLM_MODEL
 
@@ -28,15 +34,89 @@ SYSTEM_PROMPT = (
 )
 
 
-class _AsyncVllm(Vllm):
-    """Vllm with async methods via thread executor (base Vllm only implements sync)."""
+class VllmAdapter(LlamaIndexLLM):
+    """LlamaIndex LLM adapter using vLLM directly — no llama-index-llms-vllm dependency."""
+
+    model_name: str = Field(default=LLM_MODEL)
+    max_new_tokens: int = Field(default=4096)
+    temperature: float = Field(default=0.7)
+    top_p: float = Field(default=0.9)
+    context_window: int = Field(default=8192)
+
+    _engine: Any = PrivateAttr()
+    _tokenizer: Any = PrivateAttr()
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        from vllm import LLM as _VllmEngine
+        from transformers import AutoTokenizer
+        self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self._engine = _VllmEngine(
+            model=self.model_name,
+            download_dir="/data/hf-cache",
+            gpu_memory_utilization=0.85,
+            quantization="awq_marlin",
+            max_model_len=8192,
+            dtype="auto",
+        )
+
+    @property
+    def metadata(self) -> LLMMetadata:
+        return LLMMetadata(
+            context_window=self.context_window,
+            num_output=self.max_new_tokens,
+            model_name=self.model_name,
+        )
+
+    def _sampling_params(self):
+        from vllm import SamplingParams
+        return SamplingParams(
+            max_tokens=self.max_new_tokens,
+            temperature=self.temperature,
+            top_p=self.top_p,
+        )
+
+    def _messages_to_prompt(self, messages: Sequence[ChatMessage]) -> str:
+        dicts = [{"role": m.role.value, "content": m.content} for m in messages]
+        return self._tokenizer.apply_chat_template(
+            dicts, tokenize=False, add_generation_prompt=True
+        )
+
+    def _run(self, prompt: str) -> str:
+        outputs = self._engine.generate(prompt, self._sampling_params())
+        return outputs[0].outputs[0].text
+
+    def chat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> ChatResponse:
+        text = self._run(self._messages_to_prompt(messages))
+        return ChatResponse(message=ChatMessage(role=MessageRole.ASSISTANT, content=text))
+
+    def stream_chat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> Generator:
+        yield self.chat(messages, **kwargs)
+
+    def complete(self, prompt: str, formatted: bool = False, **kwargs: Any) -> CompletionResponse:
+        return CompletionResponse(text=self._run(prompt))
+
+    def stream_complete(self, prompt: str, formatted: bool = False, **kwargs: Any) -> Generator:
+        yield self.complete(prompt, **kwargs)
 
     async def achat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> ChatResponse:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, partial(self.chat, messages, **kwargs))
 
-    async def astream_chat(self, messages: Sequence[ChatMessage], **kwargs: Any):
+    async def astream_chat(self, messages: Sequence[ChatMessage], **kwargs: Any) -> AsyncGenerator:
         resp = await self.achat(messages, **kwargs)
+
+        async def _gen():
+            yield resp
+
+        return _gen()
+
+    async def acomplete(self, prompt: str, formatted: bool = False, **kwargs: Any) -> CompletionResponse:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, partial(self.complete, prompt, **kwargs))
+
+    async def astream_complete(self, prompt: str, formatted: bool = False, **kwargs: Any) -> AsyncGenerator:
+        resp = await self.acomplete(prompt, **kwargs)
 
         async def _gen():
             yield resp
@@ -46,33 +126,4 @@ class _AsyncVllm(Vllm):
 
 class LLM:
     def __init__(self, model_name: str = LLM_MODEL):
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-        def messages_to_prompt(messages):
-            dicts = [{"role": m.role.value, "content": m.content} for m in messages]
-            return tokenizer.apply_chat_template(
-                dicts, tokenize=False, add_generation_prompt=True
-            )
-
-        def completion_to_prompt(completion):
-            return tokenizer.apply_chat_template(
-                [{"role": "user", "content": completion}],
-                tokenize=False,
-                add_generation_prompt=True,
-            )
-
-        self.model = _AsyncVllm(
-            model=model_name,
-            max_new_tokens=4096,
-            temperature=0.7,
-            top_p=0.9,
-            dtype="auto",
-            download_dir="/data/hf-cache",
-            vllm_kwargs={
-                "gpu_memory_utilization": 0.85,
-                "quantization": "awq_marlin",
-                "max_model_len": 8192,
-            },
-            messages_to_prompt=messages_to_prompt,
-            completion_to_prompt=completion_to_prompt,
-        )
+        self.model = VllmAdapter(model_name=model_name)
