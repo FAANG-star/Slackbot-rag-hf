@@ -1,11 +1,10 @@
-"""Local LLM — HuggingFaceLLM singleton for generation."""
+"""Local LLM — HuggingFaceLLM wrapper for generation."""
 
 import torch
 from llama_index.llms.huggingface import HuggingFaceLLM
+from transformers import BitsAndBytesConfig
 
 from .config import LLM_MODEL
-
-_llm = None
 
 SYSTEM_PROMPT = (
     "You are a helpful assistant. You can answer questions and analyze documents.\n\n"
@@ -21,16 +20,20 @@ SYSTEM_PROMPT = (
     "If the context doesn't contain relevant information, say so honestly. Be concise but thorough."
 )
 
+_bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.float16,
+)
 
-def get_llm() -> HuggingFaceLLM:
-    """Load or return cached HuggingFaceLLM (runs on GPU)."""
-    global _llm
-    if _llm is None:
-        _llm = HuggingFaceLLM(
-            model_name=LLM_MODEL,
-            tokenizer_name=LLM_MODEL,
+
+class LLM:
+    def __init__(self, model_name: str = LLM_MODEL):
+        self.model = HuggingFaceLLM(
+            model_name=model_name,
+            tokenizer_name=model_name,
+            max_new_tokens=4096,
             device_map="auto",
-            model_kwargs={"torch_dtype": torch.float16},
-            generate_kwargs={"max_new_tokens": 4096, "temperature": 0.7, "top_p": 0.9},
+            model_kwargs={"quantization_config": _bnb_config},
+            generate_kwargs={"temperature": 0.7, "top_p": 0.9},
         )
-    return _llm

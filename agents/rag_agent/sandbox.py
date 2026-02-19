@@ -14,33 +14,28 @@ SANDBOX_NAME = "rag-agent"
 sandbox_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("git", "curl")
+    .pip_install("torch")
     .pip_install(
-        # LlamaIndex
         "llama-index-core",
         "llama-index-vector-stores-chroma",
         "llama-index-embeddings-huggingface",
         "llama-index-llms-huggingface",
         "llama-index-readers-file",
-        # Vector store
-        "chromadb",
-        # Embeddings
-        "sentence-transformers>=3.0",
-        # Local LLM
-        "transformers>=4.44",
-        "accelerate",
-        "torch",
-        "huggingface_hub[cli]",
-        # File parsing (also used by SimpleDirectoryReader)
-        "pypdf",
-        "python-docx",
-        # Data analysis
-        "pandas",
-        "openpyxl",
-        "matplotlib",
+        "bitsandbytes",
+        "transformers>=4.44", "accelerate", "sentence-transformers>=3.0",
+        "pypdf", "python-docx",
+        "pandas", "openpyxl", "matplotlib",
     )
     # Models download to volume at runtime (cached across restarts)
     .add_local_dir(str(RAG_AGENT_DIR), "/agent", copy=True)
+    .env({"IMAGE_VERSION": "7"})  # bump to force image rebuild
 )
+
+
+@app.function(image=sandbox_image)
+def _prebuild():
+    """Forces sandbox image build during `modal deploy`."""
+    pass
 
 
 def get_sandbox() -> modal.Sandbox:
@@ -53,7 +48,7 @@ def get_sandbox() -> modal.Sandbox:
             image=sandbox_image,
             workdir="/agent",
             volumes={"/data": rag_vol},
-            gpu="A100-80GB",
+            gpu="A10G",
             env={"HF_HOME": "/data/hf-cache"},
             timeout=60 * 60,
             name=SANDBOX_NAME,

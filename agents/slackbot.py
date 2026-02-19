@@ -4,6 +4,7 @@ import json
 import os
 import re
 import threading
+import traceback
 import urllib.request
 from pathlib import Path
 
@@ -37,58 +38,90 @@ slack_bot_image = (
 _rag_lock = threading.Lock()
 _rag_process = None
 _rag_stdout = None
+_rag_sandbox = None
 
 
 def _reset_rag_process():
-    """Reset the persistent RAG process references."""
-    global _rag_process, _rag_stdout
+    """Reset the persistent RAG process and terminate the sandbox so retry gets a fresh one."""
+    global _rag_process, _rag_stdout, _rag_sandbox
     _rag_process = None
     _rag_stdout = None
+    if _rag_sandbox is not None:
+        try:
+            print("[RAG] Terminating sandbox...", flush=True)
+            _rag_sandbox.terminate()
+        except Exception as e:
+            print(f"[RAG] Sandbox terminate error (ignored): {e}", flush=True)
+        _rag_sandbox = None
 
 
-def _ensure_rag_process():
+def _ensure_rag_process(set_status=None):
     """Start the RAG server process if not already running. Returns (process, stdout_iter)."""
-    global _rag_process, _rag_stdout
+    global _rag_process, _rag_stdout, _rag_sandbox
 
     if _rag_process is not None:
         return _rag_process, _rag_stdout
 
     print("[RAG] Starting server process...", flush=True)
+    if set_status:
+        set_status(status="starting RAG server...")
     sb = get_rag_sandbox()
+    _rag_sandbox = sb
     _rag_process = sb.exec("python", "-u", "/agent/agent.py")
     _rag_stdout = iter(_rag_process.stdout)
 
     # Wait for model loading to complete (reads until first END_TURN)
+    received_sentinel = False
     for line in _rag_stdout:
-        print(f"[RAG init] {line.rstrip()}", flush=True)
+        line_text = line.rstrip()
+        print(f"[RAG init] {line_text}", flush=True)
+        if set_status and line_text:
+            set_status(status=line_text.lower())
         if END_TURN in line:
+            received_sentinel = True
             break
+
+    if not received_sentinel:
+        _rag_process = None
+        _rag_stdout = None
+        raise RuntimeError("RAG process stdout closed before initialization sentinel — process may have crashed during startup")
 
     print("[RAG] Server ready.", flush=True)
     return _rag_process, _rag_stdout
 
 
-def run_rag_query(message: str, sandbox_name: str) -> list[str]:
+def run_rag_query(message: str, sandbox_name: str, set_status=None) -> list[str]:
     """Send a message to the persistent RAG process, return response lines."""
     with _rag_lock:
-        try:
-            process, stdout = _ensure_rag_process()
-        except Exception as e:
-            import traceback
-            print(f"[RAG] Process failed, resetting: {e}", flush=True)
-            traceback.print_exc()
-            _reset_rag_process()
-            process, stdout = _ensure_rag_process()
-
         msg = json.dumps({"message": message, "sandbox_name": sandbox_name}) + "\n"
-        process.stdin.write(msg.encode())
-        process.stdin.drain()
+        print(f"[RAG] Sending: {msg.strip()}", flush=True)
+
+        for attempt in range(2):
+            try:
+                process, stdout = _ensure_rag_process(set_status)
+                process.stdin.write(msg.encode())
+                process.stdin.drain()
+                break
+            except Exception as e:
+                print(f"[RAG] Process error (attempt {attempt + 1}): {e}", flush=True)
+                traceback.print_exc()
+                _reset_rag_process()
+                if attempt == 1:
+                    raise
+
+        print("[RAG] Message sent, reading response...", flush=True)
 
         lines = []
         for line in stdout:
+            print(f"[RAG out] {line.rstrip()}", flush=True)
             if END_TURN in line:
+                # Capture any content before END_TURN in the same chunk
+                content = line[:line.index(END_TURN)].strip()
+                if content:
+                    lines.append(content)
                 break
             lines.append(line)
+        print(f"[RAG] Got {len(lines)} response lines", flush=True)
         return lines
 
 
@@ -245,8 +278,7 @@ def handle_agent_message(say, set_status, user_message, thread_ts, files=None, c
             saved = _download_slack_files(files)
             if saved:
                 say(f"Saved {len(saved)} file(s): {', '.join(saved)}")
-                set_status(status="building search index...")
-                lines = run_rag_query("reindex", sandbox_name)
+                lines = run_rag_query("reindex", sandbox_name, set_status=set_status)
                 display_text, _ = _process_rag_response(lines)
                 _say_text(say, display_text)
             else:
@@ -281,8 +313,7 @@ def handle_agent_message(say, set_status, user_message, thread_ts, files=None, c
             return
 
         # --- Default → RAG query (persistent process) ---
-        set_status(status="thinking...")
-        lines = run_rag_query(user_message, sandbox_name)
+        lines = run_rag_query(user_message, sandbox_name, set_status=set_status)
         display_text, output_files = _process_rag_response(lines)
         _say_text(say, display_text)
 

@@ -7,7 +7,6 @@ from llama_index.core.llms import ChatMessage
 from llama_index.core.memory import ChatMemoryBuffer
 
 from .config import HISTORY_DIR, MEMORY_TOKEN_LIMIT
-from .llm import get_llm
 
 _memories: dict[str, ChatMemoryBuffer] = {}
 
@@ -48,13 +47,13 @@ def _delete_json_history(sandbox_name: str):
 # ---------------------------------------------------------------------------
 
 
-def get_memory(sandbox_name: str) -> ChatMemoryBuffer:
+def get_memory(sandbox_name: str, llm=None) -> ChatMemoryBuffer:
     """Get or create memory for a sandbox. Loads from JSON on first access."""
     if sandbox_name not in _memories:
-        memory = ChatMemoryBuffer.from_defaults(
-            llm=get_llm(),
-            token_limit=MEMORY_TOKEN_LIMIT,
-        )
+        kwargs = {"token_limit": MEMORY_TOKEN_LIMIT}
+        if llm is not None:
+            kwargs["llm"] = llm
+        memory = ChatMemoryBuffer.from_defaults(**kwargs)
         # Hydrate from persisted history
         for msg in _load_json_history(sandbox_name):
             memory.put(ChatMessage(role=msg["role"], content=msg["content"]))

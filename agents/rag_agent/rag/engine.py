@@ -1,4 +1,4 @@
-"""ReActAgent factory — search + code execution tools, agent creation."""
+"""AgentWorkflow factory — search + code execution tools, workflow creation."""
 
 from __future__ import annotations
 
@@ -6,12 +6,11 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from llama_index.core.agent import ReActAgent
-from llama_index.core.memory import ChatMemoryBuffer
+from llama_index.core.agent.workflow import AgentWorkflow, ReActAgent
 from llama_index.core.tools import FunctionTool
 
 from .config import TOP_K
-from .llm import SYSTEM_PROMPT, get_llm
+from .llm import LLM, SYSTEM_PROMPT
 
 if TYPE_CHECKING:
     from .indexer import Indexer
@@ -71,9 +70,8 @@ def list_output_files() -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def create_agent(indexer: Indexer, memory: ChatMemoryBuffer) -> ReActAgent:
-    """Create a ReActAgent with search + code execution tools."""
-    llm = get_llm()
+def create_workflow(indexer: Indexer, llm: LLM) -> AgentWorkflow:
+    """Create an AgentWorkflow with a ReActAgent + search/code tools."""
 
     def search_documents(query: str) -> str:
         """Search indexed documents for relevant information.
@@ -84,8 +82,10 @@ def create_agent(indexer: Indexer, memory: ChatMemoryBuffer) -> ReActAgent:
         if not indexer.has_index():
             return "No documents indexed yet. Ask the user to upload files and run reindex."
 
+        print(f"[SEARCH] Querying index: {query!r}", flush=True)
         retriever = indexer.index.as_retriever(similarity_top_k=TOP_K)
         nodes = retriever.retrieve(query)
+        print(f"[SEARCH] Retrieved {len(nodes)} chunks", flush=True)
 
         if not nodes:
             return "No relevant documents found for this query."
@@ -115,11 +115,10 @@ def create_agent(indexer: Indexer, memory: ChatMemoryBuffer) -> ReActAgent:
         ),
     )
 
-    return ReActAgent.from_tools(
+    react_agent = ReActAgent(
         tools=[search_tool, code_tool],
-        llm=llm,
-        memory=memory,
-        max_iterations=MAX_ITERATIONS,
-        verbose=True,
+        llm=llm.model,
         system_prompt=SYSTEM_PROMPT,
+        verbose=True,
     )
+    return AgentWorkflow(agents=[react_agent])

@@ -12,6 +12,7 @@ Commands:
     {"message": "<any question>", "sandbox_name": "..."}
 """
 
+import asyncio
 import json
 import shutil
 import sys
@@ -19,17 +20,18 @@ import traceback
 from pathlib import Path
 
 from rag.config import CHROMA_DIR
-from rag.engine import create_agent, list_output_files
+from rag.engine import create_workflow, list_output_files
 from rag.history import clear_memory, get_memory, persist_memory
 from rag.indexer import Indexer
-from rag.llm import get_llm
+from rag.llm import LLM
 
 END_TURN = "---END_TURN---"
 OUTPUT_DIR = Path("/data/rag/output")
 
 
 class MessageHandler:
-    def __init__(self, indexer: Indexer):
+    def __init__(self, llm: LLM, indexer: Indexer):
+        self.llm = llm
         self.indexer = indexer
 
     def run(self):
@@ -42,7 +44,7 @@ class MessageHandler:
                 data = json.loads(line)
                 self.handle(data["message"], data["sandbox_name"])
             except Exception:
-                traceback.print_exc()
+                traceback.print_exc(file=sys.stdout)
                 print("Error processing message", flush=True)
             print(END_TURN, flush=True)
 
@@ -83,11 +85,15 @@ class MessageHandler:
     def _query(self, msg: str, sandbox_name: str):
         shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
 
-        memory = get_memory(sandbox_name)
-        agent = create_agent(self.indexer, memory)
+        memory = get_memory(sandbox_name, llm=self.llm.model)
+        workflow = create_workflow(self.indexer, self.llm)
 
         print("Thinking...", flush=True)
-        response = agent.chat(msg)
+
+        async def _run():
+            return await workflow.run(user_msg=msg, memory=memory, max_iterations=10)
+
+        response = asyncio.run(_run())
         print(str(response), flush=True)
 
         for path in list_output_files():
@@ -103,10 +109,10 @@ class MessageHandler:
 
 def main():
     print("Loading LLM...", flush=True)
-    get_llm()
+    llm = LLM()
 
     print("Loading indexer...", flush=True)
-    handler = MessageHandler(Indexer())
+    handler = MessageHandler(llm, Indexer())
 
     print("Models loaded. Ready for queries.", flush=True)
     print(END_TURN, flush=True)
