@@ -92,7 +92,7 @@ class MessageHandler:
         print("Searching...", file=sys.stderr, flush=True)
 
         async def _run():
-            return await workflow.run(user_msg=msg, memory=memory, max_iterations=10)
+            return await workflow.run(user_msg=msg, memory=memory, max_iterations=50)
 
         t0 = time.monotonic()
         response = asyncio.run(_run())
