@@ -5,6 +5,7 @@ from agents.ml_agent.client import MlClient
 from agents.rag_agent.client import RagClient
 
 from .file_manager import FileManager
+from .index_client import IndexClient
 from .router import MessageRouter
 
 
@@ -15,4 +16,7 @@ class ServiceContainer:
         self.rag = RagClient()
         self.ml = MlClient()
         self.files = FileManager(volume=rag_vol)
-        self.router = MessageRouter(rag=self.rag, ml=self.ml, files=self.files)
+        self.indexer = IndexClient(volume=rag_vol)
+        self.router = MessageRouter(
+            rag=self.rag, ml=self.ml, files=self.files, indexer=self.indexer
+        )

@@ -5,6 +5,7 @@ Reads JSON messages from stdin, writes responses to stdout.
 Each response ends with END_TURN sentinel.
 
 Commands:
+    {"message": "reload", "sandbox_name": "..."}
     {"message": "reindex", "sandbox_name": "..."}
     {"message": "reindex --force", "sandbox_name": "..."}
     {"message": "status", "sandbox_name": "..."}
@@ -54,7 +55,9 @@ class MessageHandler:
         msg = user_msg.strip()
         lower = msg.lower()
 
-        if lower.startswith("reindex"):
+        if lower == "reload":
+            self._reload()
+        elif lower.startswith("reindex"):
             self._reindex(lower)
         elif lower == "status":
             self._status()
@@ -62,6 +65,16 @@ class MessageHandler:
             self._clear(sandbox_name)
         else:
             self._query(msg, sandbox_name)
+
+    def _reload(self):
+        """Reload ChromaDB and manifest after external index changes."""
+        import modal
+
+        print("Reloading volume...", flush=True)
+        modal.Volume.from_name("sandbox-rag").reload()
+        print("Rebuilding index...", flush=True)
+        self.indexer = Indexer()
+        print(f"Index reloaded. {self.indexer.stats()}", flush=True)
 
     def _reindex(self, lower: str):
         force = "--force" in lower

@@ -3,7 +3,6 @@
 import os
 import threading
 import urllib.request
-import zipfile
 from pathlib import Path
 
 import modal
@@ -25,22 +24,21 @@ class FileManager:
             for f in files:
                 url = f.get("url_private_download") or f.get("url_private")
                 if not url:
+                    print(f"[files] skipping file {f.get('name', '?')}: no url", flush=True)
                     continue
+                filename = f.get("name", f["id"])
+                print(f"[files] downloading {filename} ({f.get('size', '?')} bytes)...", flush=True)
                 req = urllib.request.Request(url)
                 req.add_header("Authorization", f"Bearer {os.environ['SLACK_BOT_TOKEN']}")
                 with urllib.request.urlopen(req, timeout=120) as resp:
                     content = resp.read()
-                filename = f.get("name", f["id"])
+                print(f"[files] downloaded {len(content)} bytes", flush=True)
                 dest = self._docs_dir / filename
                 dest.write_bytes(content)
-                if zipfile.is_zipfile(dest):
-                    with zipfile.ZipFile(dest) as zf:
-                        zf.extractall(self._docs_dir)
-                    dest.unlink()
-                    saved.append(f"{filename} (extracted)")
-                else:
-                    saved.append(filename)
+                saved.append(filename)
+            print(f"[files] committing volume...", flush=True)
             self._volume.commit()
+            print(f"[files] done: {saved}", flush=True)
             return saved
 
     def list_sources(self) -> str:

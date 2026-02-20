@@ -31,7 +31,7 @@ sandbox_image = (
     .run_commands("python -c 'from llama_index.core.agent.workflow import AgentWorkflow, ReActAgent; from chromadb import PersistentClient; print(\"llama-index OK\")'")
     # Models download to volume at runtime (cached across restarts)
     .add_local_dir(str(RAG_AGENT_DIR), "/agent", copy=True)
-    .env({"IMAGE_VERSION": "35"})  # bump to force image rebuild
+    .env({"IMAGE_VERSION": "40"})  # bump to force image rebuild
 )
 
 

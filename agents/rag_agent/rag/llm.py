@@ -41,7 +41,7 @@ class VllmAdapter(LlamaIndexLLM):
     max_new_tokens: int = Field(default=4096)
     temperature: float = Field(default=0.7)
     top_p: float = Field(default=0.8)
-    context_window: int = Field(default=32768)
+    context_window: int = Field(default=16384)
 
     _engine: Any = PrivateAttr()
     _tokenizer: Any = PrivateAttr()
@@ -54,9 +54,9 @@ class VllmAdapter(LlamaIndexLLM):
         self._engine = _VllmEngine(
             model=self.model_name,
             download_dir="/data/hf-cache",
-            gpu_memory_utilization=0.85,
+            gpu_memory_utilization=0.75,
             quantization="awq_marlin",
-            max_model_len=32768,
+            max_model_len=16384,
             dtype="auto",
             compilation_config={"cache_dir": "/data/vllm-cache"},
         )

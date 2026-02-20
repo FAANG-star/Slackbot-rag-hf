@@ -6,6 +6,7 @@ from agents.infra import app
 from agents.infra.shared import rag_vol
 from agents.ml_agent import get_sandbox as _ml_sandbox  # noqa: F401  registers @app.function deps
 from agents.rag_agent import get_sandbox as _rag_sandbox  # noqa: F401  registers @app.function deps
+import agents.rag_agent.indexer_workers  # noqa: F401  registers GPU worker functions
 
 slack_secret = modal.Secret.from_name("slack-secret")
 

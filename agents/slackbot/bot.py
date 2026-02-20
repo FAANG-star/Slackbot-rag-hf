@@ -1,7 +1,5 @@
 """SlackBot — sets up slack-bolt handlers, delegates to injected router."""
 
-from __future__ import annotations
-
 import os
 import re
 import threading
@@ -20,7 +18,7 @@ class SlackBot:
         {"title": "ML training", "message": "hf: Help me fine-tune a model on HuggingFace"},
     ]
 
-    def __init__(self, container: ServiceContainer):
+    def __init__(self, container: "ServiceContainer"):
         self._router = container.router
 
     def create_fastapi_app(self):
@@ -66,6 +64,7 @@ class SlackBot:
         @slack_app.event("app_mention")
         def handle_mention(body, client, **kwargs):
             event = body["event"]
+            print(f"[bot] app_mention: text={event.get('text', '')[:60]!r} files={len(event.get('files', []))}", flush=True)
             message = re.sub(r"<@[A-Z0-9]+>", "", event["text"]).strip()
             channel = event["channel"]
             thread_ts = event.get("thread_ts", event["ts"])
@@ -87,8 +86,13 @@ class SlackBot:
 
         @slack_app.event("message")
         def handle_message(event, client, **kwargs):
-            # Route direct messages; ignore channel messages (handled by app_mention)
-            if event.get("channel_type") != "im" or event.get("subtype"):
+            subtype = event.get("subtype")
+            is_im = event.get("channel_type") == "im"
+            print(f"[bot] message: subtype={subtype} is_im={is_im} files={len(event.get('files', []))} text={event.get('text', '')[:60]!r}", flush=True)
+            # Allow: plain DMs and file_share (DM or channel)
+            if subtype and subtype != "file_share":
+                return
+            if not is_im and not event.get("files"):
                 return
             channel = event["channel"]
             thread_ts = event.get("thread_ts", event["ts"])
