@@ -65,18 +65,28 @@ class RagClient:
         # No existing sandbox — boot a fresh one.
         if on_status:
             on_status("starting RAG server...")
-        self._sandbox = modal.Sandbox.create(
-            "python", "-u", "-m", "server.main",
-            app=app,
-            image=sandbox_image,
-            workdir="/agent",
-            volumes={"/data": rag_vol},
-            gpu="A10G",
-            env={"HF_HOME": "/data/hf-cache"},
-            timeout=60 * 60,
-            name=SANDBOX_NAME,
-            idle_timeout=20 * 60,
-        )
+        try:
+            self._sandbox = modal.Sandbox.create(
+                "python", "-u", "-m", "server.main",
+                app=app,
+                image=sandbox_image,
+                workdir="/agent",
+                volumes={"/data": rag_vol},
+                gpu="A10G",
+                env={"HF_HOME": "/data/hf-cache"},
+                timeout=60 * 60,
+                name=SANDBOX_NAME,
+                idle_timeout=20 * 60,
+            )
+        except modal.exception.AlreadyExistsError:
+            # Race: from_name() said not found, but create() says it exists.
+            # Modal's name registry has a propagation delay during termination.
+            # create() confirming existence means from_name() will now find it.
+            existing = modal.Sandbox.from_name(app_name=app.name, name=SANDBOX_NAME)
+            self._sandbox = existing
+            self._stdout = iter(existing.stdout)
+            print("[RAG] Reconnected to sandbox (race recovery)", flush=True)
+            return
         self._stdout = iter(self._sandbox.stdout)
 
         received = False

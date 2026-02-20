@@ -5,7 +5,7 @@ from llama_index.core import StorageContext, VectorStoreIndex
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
-from ..config import CHROMA_DIR, EMBED_BATCH_SIZE, EMBEDDING_MODEL
+from ..config import CHROMA_DIR, CHUNK_SIZE, EMBED_BATCH_SIZE, EMBEDDING_MODEL
 from .chunk_store import ChunkStore
 from .document_parser import DocumentParser
 from .manifest import Manifest
@@ -40,6 +40,13 @@ class Indexer:
             storage_context=storage_context,
         )
 
+    def reload(self):
+        """Reload ChromaDB from volume without re-loading the embedding model."""
+        self._client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+        self.store = ChunkStore(self._client)
+        self.manifest = Manifest()
+        self._rebuild_index()
+
     def has_index(self) -> bool:
         return bool(self.manifest.load())
 
@@ -69,7 +76,7 @@ class Indexer:
         pending = []
         for _, nodes in self.parser.parse(to_add):
             pending.extend(nodes)
-            if len(pending) >= 512:
+            if len(pending) >= CHUNK_SIZE:
                 self.index.insert_nodes(pending)
                 added_count += len(pending)
                 pending = []

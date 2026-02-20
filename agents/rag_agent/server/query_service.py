@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import shutil
-import sys
 import time
-from pathlib import Path
 from typing import TYPE_CHECKING
 
+from rag.config import OUTPUT_DIR
 from rag.engine import create_workflow
 from rag.tools import list_output_files
 
@@ -16,8 +15,6 @@ if TYPE_CHECKING:
     from rag.history import HistoryManager
     from rag.indexer import Indexer
     from rag.llm import LLM
-
-OUTPUT_DIR = Path("/data/rag/output")
 
 
 class QueryService:
@@ -34,8 +31,6 @@ class QueryService:
 
         memory = self._history.get(sandbox_name, llm=self.llm.model)
         workflow, stats = create_workflow(self.indexer, self.llm, memory=memory)
-
-        print("Searching...", file=sys.stderr, flush=True)
 
         async def _run():
             return await workflow.run(user_msg=msg)

@@ -30,7 +30,6 @@ class MessageHandler:
                 self._handle(data["message"], data["sandbox_name"])
             except Exception:
                 tb = traceback.format_exc()
-                print(tb, file=sys.stderr, flush=True)
                 print(f"Error: {tb}", flush=True)
             print(END_TURN, flush=True)
 
@@ -41,8 +40,7 @@ class MessageHandler:
         c = self._container
 
         if lower == "reload":
-            c.indexer = commands.reload(c.indexer)
-            c.query_service.indexer = c.indexer
+            commands.reload(c.indexer)
         elif lower.startswith("reindex"):
             commands.reindex(c.indexer, "--force" in lower)
         elif lower == "status":

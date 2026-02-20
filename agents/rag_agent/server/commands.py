@@ -3,30 +3,24 @@
 from __future__ import annotations
 
 import shutil
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-from rag.config import CHROMA_DIR
+from rag.config import CHROMA_DIR, OUTPUT_DIR
 
 if TYPE_CHECKING:
     from rag.history import HistoryManager
     from rag.indexer import Indexer
 
-OUTPUT_DIR = Path("/data/rag/output")
 
-
-def reload(indexer: Indexer) -> Indexer:
+def reload(indexer: Indexer):
     """Reload ChromaDB and manifest after external index changes."""
     import modal
-
-    from rag.indexer import Indexer as _Indexer
 
     print("Reloading volume...", flush=True)
     modal.Volume.from_name("sandbox-rag").reload()
     print("Rebuilding index...", flush=True)
-    new_indexer = _Indexer()
-    print(f"Index reloaded. {new_indexer.stats()}", flush=True)
-    return new_indexer
+    indexer.reload()
+    print(f"Index reloaded. {indexer.stats()}", flush=True)
 
 
 def reindex(indexer: Indexer, force: bool):

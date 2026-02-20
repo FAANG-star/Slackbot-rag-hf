@@ -7,6 +7,7 @@ RAG_ROOT = Path("/data/rag")
 DOCS_DIR = RAG_ROOT / "docs"
 CHROMA_DIR = RAG_ROOT / "chroma"
 HISTORY_DIR = RAG_ROOT / "history"
+OUTPUT_DIR = RAG_ROOT / "output"
 MANIFEST_PATH = CHROMA_DIR / "manifest.json"
 
 # --- Models ---

@@ -1,11 +1,8 @@
 """Stateless tool functions for the ReAct agent."""
 
 import subprocess
-from pathlib import Path
 
-from .config import DOCS_DIR
-
-OUTPUT_DIR = Path("/data/rag/output")
+from .config import DOCS_DIR, OUTPUT_DIR
 
 
 def execute_python(code: str) -> str:
@@ -27,14 +24,14 @@ def execute_python(code: str) -> str:
     except subprocess.TimeoutExpired:
         return "[Error: Code execution timed out after 120 seconds]"
 
-    output = ""
+    parts = []
     if result.stdout:
-        output += result.stdout
+        parts.append(result.stdout)
     if result.stderr:
-        output += f"\n[STDERR]\n{result.stderr}"
+        parts.append(f"[STDERR]\n{result.stderr}")
     if result.returncode != 0:
-        output += f"\n[Exit code: {result.returncode}]"
-    return output.strip() or "[No output]"
+        parts.append(f"[Exit code: {result.returncode}]")
+    return "\n".join(parts).strip() or "[No output]"
 
 
 def list_output_files() -> list[str]:

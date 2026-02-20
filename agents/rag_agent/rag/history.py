@@ -24,15 +24,12 @@ class HistoryManager:
             self._memories.move_to_end(sandbox_name)
             return self._memories[sandbox_name]
 
-        kwargs = {"token_limit": MEMORY_TOKEN_LIMIT}
-        if llm is not None:
-            kwargs["llm"] = llm
-        memory = ChatMemoryBuffer.from_defaults(**kwargs)
+        memory = ChatMemoryBuffer.from_defaults(token_limit=MEMORY_TOKEN_LIMIT, llm=llm)
         for msg in self._load_json(sandbox_name):
             memory.put(ChatMessage(role=msg["role"], content=msg["content"]))
 
         self._memories[sandbox_name] = memory
-        while len(self._memories) > _MAX_CONVERSATIONS:
+        while len(self._memories) > _MAX_CONVERSATIONS:  # LRU eviction
             self._memories.popitem(last=False)
         return memory
 

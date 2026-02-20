@@ -5,7 +5,7 @@ from .ml_client import MlClient
 from .rag_client import RagClient
 
 from .file_manager import FileManager
-from .index_client import IndexClient
+from agents.rag_agent.indexer_workers.pipeline import IndexPipeline
 from .router import MessageRouter
 
 
@@ -16,7 +16,7 @@ class ServiceContainer:
         self.rag = RagClient()
         self.ml = MlClient()
         self.files = FileManager(volume=rag_vol)
-        self.indexer = IndexClient(volume=rag_vol)
+        self.indexer = IndexPipeline(volume=rag_vol)
         self.router = MessageRouter(
             rag=self.rag, ml=self.ml, files=self.files, indexer=self.indexer
         )

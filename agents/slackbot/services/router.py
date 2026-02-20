@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from .rag_client import RagClient
 
     from .file_manager import FileManager
-    from .index_client import IndexClient
+    from agents.rag_agent.indexer_workers.pipeline import IndexPipeline
 
 
 @dataclass
@@ -32,7 +32,7 @@ class MessageContext:
 class MessageRouter:
     """Dispatches messages to the appropriate agent or file operation."""
 
-    def __init__(self, rag: RagClient, ml: MlClient, files: FileManager, indexer: IndexClient):
+    def __init__(self, rag: RagClient, ml: MlClient, files: FileManager, indexer: IndexPipeline):
         self._rag = rag
         self._ml = ml
         self._files = files
