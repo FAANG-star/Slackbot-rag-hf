@@ -1,5 +1,5 @@
 ---
-name: modal-ml-sandbox
+name: modal-sb
 description: Build a secure Modal sandbox that runs a Claude agent without exposing credentials. Proxy-based API isolation, volume-based data sync, and Claude Agent SDK entrypoint.
 ---
 
@@ -18,19 +18,15 @@ Build a secure Modal sandbox that runs a Claude agent. The agent never holds the
 
 ```
 ml_agent/
-  app.py                  ← CLI entrypoint (python -m ml_agent.app "message")
-  agent/
-    agent.py              ← runs inside sandbox, bridges stdin to Claude SDK
+  __init__.py             ← module init
+  agent.py                ← runs inside sandbox, bridges stdin to Claude SDK
+  proxy.py                ← Anthropic API proxy
+  sandbox.py              ← sandbox image and creation
+  trackio_sync.py         ← metric syncer
   .claude/
     CLAUDE.md             ← agent instructions (baked into sandbox at /app/.claude/)
     scripts/              ← utility scripts the agent can call
     skills/               ← agent skills (transformers, trackio)
-  infra/
-    __init__.py           ← re-exports app, create_sandbox
-    shared.py             ← Modal app, volumes, constants
-    proxy.py              ← Anthropic API proxy
-    sandbox.py            ← sandbox image and creation
-    trackio_sync.py       ← metric syncer
 ```
 
 ## Reference Files

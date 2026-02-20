@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Any, Callable
 from .formatter import say_chunked
 
 if TYPE_CHECKING:
-    from agents.ml_agent.client import MlClient
-    from agents.rag_agent.client import RagClient
+    from .ml_client import MlClient
+    from .rag_client import RagClient
 
     from .file_manager import FileManager
     from .index_client import IndexClient

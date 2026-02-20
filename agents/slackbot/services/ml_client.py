@@ -2,7 +2,7 @@
 
 import threading
 
-from agents.ml_agent import get_sandbox
+from agents.ml_agent.sandbox import get_sandbox
 
 
 class MlClient:

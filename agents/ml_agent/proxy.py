@@ -4,7 +4,7 @@ import os
 
 import modal
 
-from .shared import app
+from agents.slackbot.shared import app
 
 proxy_secret = modal.Secret.from_name("anthropic-secret")
 proxy_image = modal.Image.debian_slim(python_version="3.12").pip_install("httpx", "fastapi")

@@ -1,8 +1,8 @@
 """Service container — singleton lifecycle for all slackbot services."""
 
-from agents.infra.shared import rag_vol
-from agents.ml_agent.client import MlClient
-from agents.rag_agent.client import RagClient
+from agents.slackbot.shared import rag_vol
+from .ml_client import MlClient
+from .rag_client import RagClient
 
 from .file_manager import FileManager
 from .index_client import IndexClient

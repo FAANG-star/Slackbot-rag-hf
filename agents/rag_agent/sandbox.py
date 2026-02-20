@@ -4,7 +4,7 @@ from pathlib import Path
 
 import modal
 
-from agents.infra.shared import app, rag_vol
+from agents.slackbot.shared import app, rag_vol
 
 RAG_AGENT_DIR = Path(__file__).parent
 
@@ -29,9 +29,10 @@ sandbox_image = (
     )
     .run_commands("python -c 'from vllm import LLM, SamplingParams; print(\"vllm OK\")'")
     .run_commands("python -c 'from llama_index.core.agent.workflow import AgentWorkflow, ReActAgent; from chromadb import PersistentClient; print(\"llama-index OK\")'")
+    .env({"IMAGE_VERSION": "49"})  # bump BEFORE add_local_dir to invalidate code layers
     # Models download to volume at runtime (cached across restarts)
-    .add_local_dir(str(RAG_AGENT_DIR), "/agent", copy=True)
-    .env({"IMAGE_VERSION": "40"})  # bump to force image rebuild
+    .add_local_dir(str(RAG_AGENT_DIR / "server"), "/agent/server", copy=True)
+    .add_local_dir(str(RAG_AGENT_DIR / "rag"), "/agent/rag", copy=True)
 )
 
 
@@ -39,22 +40,3 @@ sandbox_image = (
 def _prebuild():
     """Forces sandbox image build during `modal deploy`."""
     pass
-
-
-def get_sandbox() -> modal.Sandbox:
-    """Get the existing RAG sandbox or create a new one."""
-    try:
-        return modal.Sandbox.from_name(app_name=app.name, name=SANDBOX_NAME)
-    except modal.exception.NotFoundError:
-        return modal.Sandbox.create(
-            "sleep", "infinity",
-            app=app,
-            image=sandbox_image,
-            workdir="/agent",
-            volumes={"/data": rag_vol},
-            gpu="A10G",
-            env={"HF_HOME": "/data/hf-cache"},
-            timeout=60 * 60,
-            name=SANDBOX_NAME,
-            idle_timeout=20 * 60,
-        )

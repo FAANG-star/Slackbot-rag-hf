@@ -4,9 +4,9 @@ from pathlib import Path
 
 import modal
 
-from agents.infra.shared import app, data_vol, trackio_vol, TRACKIO_MOUNT
-from agents.infra.proxy import anthropic_proxy
-from agents.infra.trackio_sync import trackio_syncer
+from agents.slackbot.shared import app, data_vol, trackio_vol, TRACKIO_MOUNT
+from .proxy import anthropic_proxy
+from .trackio_sync import trackio_syncer
 
 ENTRYPOINT = Path(__file__).parent / "agent.py"
 CLAUDE_DIR = Path(__file__).parent / ".claude"

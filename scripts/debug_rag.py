@@ -11,16 +11,17 @@ import threading
 import modal
 modal.enable_output()
 
-from agents.infra.shared import app, rag_vol
+from agents.slackbot.shared import app, rag_vol
 from agents.rag_agent.sandbox import sandbox_image, SANDBOX_NAME
 
 END_TURN = "---END_TURN---"
 
 
-def _stream_stderr(process):
+def _stream_stderr(sandbox):
     """Stream sandbox stderr to local terminal prefixed with [AGENT]."""
-    for line in process.stderr:
+    for line in sandbox.stderr:
         print(f"[AGENT] {line.rstrip()}", flush=True)
+
 
 TEST_PROMPTS = {
     "rag": "What does the Attention is All You Need paper say about multi-head attention?",
@@ -46,11 +47,11 @@ def _read_until_sentinel(stdout):
     return "\n".join(lines)
 
 
-def _send_and_print(process, stdout, prompt):
+def _send_and_print(sandbox, stdout, prompt):
     """Send a prompt and print the response."""
     msg = json.dumps({"message": prompt, "sandbox_name": "debug-test"}) + "\n"
-    process.stdin.write(msg.encode())
-    process.stdin.drain()
+    sandbox.stdin.write(msg.encode())
+    sandbox.stdin.drain()
     response = _read_until_sentinel(stdout)
     print(response)
     print()
@@ -66,9 +67,9 @@ def main(test: str = ""):
     except modal.exception.NotFoundError:
         pass
 
-    # Create fresh sandbox
+    # Create fresh sandbox with server.main as the main command
     sb = modal.Sandbox.create(
-        "sleep", "infinity",
+        "python", "-u", "-m", "server.main",
         app=app,
         image=sandbox_image,
         workdir="/agent",
@@ -78,9 +79,8 @@ def main(test: str = ""):
         timeout=15 * 60,
         name=SANDBOX_NAME,
     )
-    process = sb.exec("python", "-u", "/agent/agent.py")
-    stdout = iter(process.stdout)
-    threading.Thread(target=_stream_stderr, args=(process,), daemon=True).start()
+    stdout = iter(sb.stdout)
+    threading.Thread(target=_stream_stderr, args=(sb,), daemon=True).start()
 
     # Wait for init
     print("Loading models...")
@@ -100,7 +100,7 @@ def main(test: str = ""):
             sb.terminate()
             return
         print(f"[test={test}] {prompt}\n")
-        _send_and_print(process, stdout, prompt)
+        _send_and_print(sb, stdout, prompt)
         sb.terminate()
         return
 
@@ -116,6 +116,6 @@ def main(test: str = ""):
         if prompt.lower() in ("quit", "exit"):
             break
 
-        _send_and_print(process, stdout, prompt)
+        _send_and_print(sb, stdout, prompt)
 
     sb.terminate()
