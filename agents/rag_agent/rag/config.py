@@ -11,11 +11,14 @@ MANIFEST_PATH = CHROMA_DIR / "manifest.json"
 
 # --- Models ---
 EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"  # 335M params, 1024-dim, top MTEB
-LLM_MODEL = "Qwen/Qwen2.5-14B-Instruct-AWQ"  # AWQ 4-bit via vLLM, ~8GB on A10G
+LLM_MODEL = "Qwen/Qwen3-14B-AWQ"  # AWQ 4-bit via vLLM, ~8GB on A10G
 
 # --- Chunking ---
 CHUNK_SIZE = 512
 CHUNK_OVERLAP = 64
+
+# --- Embedding ---
+EMBED_BATCH_SIZE = 256  # texts per GPU forward pass
 
 # --- Retrieval ---
 TOP_K = 6

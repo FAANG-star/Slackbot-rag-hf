@@ -15,7 +15,7 @@ Plus, there are no idle compute costs. Tagging the bot cold-starts a GPU quickly
 - [Architecture](#architecture)
 - [Setup](#setup)
 - [Demo](#demo)
-  - [RAG: Enron Email Corpus](#rag-enron-email-corpus)
+  - [RAG: Wikipedia](#rag-wikipedia)
   - [ML Training](#ml-training)
   - [Debugging](#debugging)
 - [Credits](#credits)
@@ -46,7 +46,7 @@ Works in DMs (via the Slack [Assistant](https://api.slack.com/docs/apps/ai) prot
 
 ### RAG Agent — Local LLM on GPU
 
-A fully local RAG pipeline running [Qwen2.5-14B](https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-AWQ) (4-bit AWQ) on an A10G GPU via [vLLM](https://github.com/vllm-project/vllm). No external API calls for inference. Documents are indexed with [ChromaDB](https://www.trychroma.com/) and queried through a [LlamaIndex](https://www.llamaindex.ai/) ReAct agent with three tools:
+A fully local RAG pipeline running [Qwen3-14B](https://huggingface.co/Qwen/Qwen3-14B-AWQ) (4-bit AWQ) on an A10G GPU via [vLLM](https://github.com/vllm-project/vllm). No external API calls for inference. Documents are indexed with [ChromaDB](https://www.trychroma.com/) and queried through a [LlamaIndex](https://www.llamaindex.ai/) ReAct agent with three tools:
 
 - **`search_documents`** — semantic search over indexed documents using [BGE-large](https://huggingface.co/BAAI/bge-large-en-v1.5) embeddings
 - **`execute_python`** — runs Python code for data analysis, chart generation, file processing (pandas, matplotlib, openpyxl pre-installed)
@@ -151,28 +151,23 @@ modal run scripts/upload_test_data.py
 
 ## Demo
 
-### RAG: Enron Email Corpus
+### RAG: Wikipedia
 
-Imagine you're an investigative journalist with access to ~500,000 internal corporate emails from [Enron](https://www.cs.cmu.edu/~enron/) — the kind of sensitive data you'd never send to a third-party API. The collection is also far too large for a single context window. Even at 1M tokens, you'd cover maybe 1% of the data.
+Drop a [Wikipedia dump](https://dumps.wikimedia.org/) into the bot — thousands of articles across every topic. Too much for any context window, but the kind of broad knowledge base where semantic search shines.
 
-Upload the corpus to the volume, and the agent indexes it locally. Then ask questions from Slack:
+Upload the zip to the bot in Slack — it extracts and indexes the articles automatically. Then ask questions:
 
-```bash
-# Download and upload the Enron corpus to the RAG volume
-modal run scripts/upload_enron.py
-```
+> **You:** What were the main causes and consequences of the 2008 financial crisis?
 
-> **You:** Who discussed the Raptor SPE transactions and when did awareness spread through the organization?
+The agent searches across thousands of articles, pulls relevant sections from multiple pages, and synthesizes a coherent answer — all on your GPU, nothing sent externally.
 
-The agent searches across hundreds of thousands of emails, finds the relevant threads, and synthesizes an answer — all on your GPU, nothing sent externally.
+> **You:** Plot a timeline of major space exploration milestones from 1957 to 2024.
 
-> **You:** Plot email volume by month for the top 10 senders. When does communication spike?
+The agent calls `execute_python` to extract dates and events from the indexed articles, builds a chart with matplotlib, and uploads it to the Slack thread. The kind of analysis that needs both retrieval and computation — neither a context window nor a simple search engine can do this alone.
 
-The agent calls `execute_python` to parse timestamps across the corpus with pandas, builds a chart with matplotlib, and uploads it to the Slack thread. The kind of analysis that needs both retrieval and computation — neither a context window nor a simple search engine can do this alone.
+> **You:** Compare the economic systems described in the articles on capitalism, socialism, and mixed economies.
 
-> **You:** Find all messages between executives mentioning mark-to-market accounting. What concerns were raised?
-
-Search + synthesis across a corpus that would take a human weeks to read through.
+Search + synthesis across a corpus that would take hours to read through manually.
 
 ### ML Training
 

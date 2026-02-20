@@ -85,7 +85,29 @@ class SlackBot:
                 target=self._router.route, args=(ctx,), daemon=True
             ).start()
 
-        slack_app.event("message")(lambda **kw: None)
+        @slack_app.event("message")
+        def handle_message(event, client, **kwargs):
+            # Route direct messages; ignore channel messages (handled by app_mention)
+            if event.get("channel_type") != "im" or event.get("subtype"):
+                return
+            channel = event["channel"]
+            thread_ts = event.get("thread_ts", event["ts"])
+            message = event.get("text", "")
+            ctx = MessageContext(
+                message=message,
+                sandbox_name=f"agent-{thread_ts}".replace(".", "-"),
+                thread_ts=thread_ts,
+                say=lambda text: client.chat_postMessage(
+                    channel=channel, text=text, thread_ts=thread_ts,
+                ),
+                set_status=lambda s: None,
+                files=event.get("files"),
+                client=client,
+                channel=channel,
+            )
+            threading.Thread(
+                target=self._router.route, args=(ctx,), daemon=True
+            ).start()
 
         fastapi_app = FastAPI()
 

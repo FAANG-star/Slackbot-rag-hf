@@ -40,8 +40,8 @@ class VllmAdapter(LlamaIndexLLM):
     model_name: str = Field(default=LLM_MODEL)
     max_new_tokens: int = Field(default=4096)
     temperature: float = Field(default=0.7)
-    top_p: float = Field(default=0.9)
-    context_window: int = Field(default=8192)
+    top_p: float = Field(default=0.8)
+    context_window: int = Field(default=32768)
 
     _engine: Any = PrivateAttr()
     _tokenizer: Any = PrivateAttr()
@@ -56,8 +56,9 @@ class VllmAdapter(LlamaIndexLLM):
             download_dir="/data/hf-cache",
             gpu_memory_utilization=0.85,
             quantization="awq_marlin",
-            max_model_len=8192,
+            max_model_len=32768,
             dtype="auto",
+            compilation_config={"cache_dir": "/data/vllm-cache"},
         )
 
     @property
@@ -74,12 +75,13 @@ class VllmAdapter(LlamaIndexLLM):
             max_tokens=self.max_new_tokens,
             temperature=self.temperature,
             top_p=self.top_p,
+            presence_penalty=1.5,
         )
 
     def _messages_to_prompt(self, messages: Sequence[ChatMessage]) -> str:
         dicts = [{"role": m.role.value, "content": m.content} for m in messages]
         return self._tokenizer.apply_chat_template(
-            dicts, tokenize=False, add_generation_prompt=True
+            dicts, tokenize=False, add_generation_prompt=True, enable_thinking=False
         )
 
     def _run(self, prompt: str) -> str:

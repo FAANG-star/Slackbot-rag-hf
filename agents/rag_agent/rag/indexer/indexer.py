@@ -5,7 +5,7 @@ from llama_index.core import StorageContext, VectorStoreIndex
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
-from ..config import CHROMA_DIR, EMBEDDING_MODEL
+from ..config import CHROMA_DIR, EMBED_BATCH_SIZE, EMBEDDING_MODEL
 from .chunk_store import ChunkStore
 from .document_parser import DocumentParser
 from .manifest import Manifest
@@ -21,6 +21,7 @@ class Indexer:
             model_name=EMBEDDING_MODEL,
             device="cuda",
             normalize=True,
+            embed_batch_size=EMBED_BATCH_SIZE,
         )
         CHROMA_DIR.mkdir(parents=True, exist_ok=True)
         self._client = chromadb.PersistentClient(path=str(CHROMA_DIR))
@@ -65,9 +66,16 @@ class Indexer:
         deleted_count = self.store.delete_by_source(to_delete)
 
         added_count = 0
+        pending = []
         for _, nodes in self.parser.parse(to_add):
-            added_count += len(nodes)
-            self.index.insert_nodes(nodes)
+            pending.extend(nodes)
+            if len(pending) >= 512:
+                self.index.insert_nodes(pending)
+                added_count += len(pending)
+                pending = []
+        if pending:
+            self.index.insert_nodes(pending)
+            added_count += len(pending)
 
         self.manifest.save(current_files)
         return (self.store.count(), added_count, deleted_count)

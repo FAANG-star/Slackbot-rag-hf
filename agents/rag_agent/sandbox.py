@@ -19,7 +19,7 @@ sandbox_image = (
         "llama-index-vector-stores-chroma",
         "llama-index-embeddings-huggingface",
         "llama-index-readers-file",
-        "transformers>=4.44",
+        "transformers>=4.51",
         "sentence-transformers>=3.0",
         "pypdf",
         "python-docx",
@@ -31,7 +31,7 @@ sandbox_image = (
     .run_commands("python -c 'from llama_index.core.agent.workflow import AgentWorkflow, ReActAgent; from chromadb import PersistentClient; print(\"llama-index OK\")'")
     # Models download to volume at runtime (cached across restarts)
     .add_local_dir(str(RAG_AGENT_DIR), "/agent", copy=True)
-    .env({"IMAGE_VERSION": "34"})  # bump to force image rebuild
+    .env({"IMAGE_VERSION": "35"})  # bump to force image rebuild
 )
 
 
