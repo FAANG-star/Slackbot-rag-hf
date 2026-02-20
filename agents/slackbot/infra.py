@@ -1,4 +1,4 @@
-"""Shared Modal app and volumes."""
+"""Modal app and volume definitions — shared across all agents."""
 
 import modal
 

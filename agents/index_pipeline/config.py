@@ -2,7 +2,7 @@
 
 import modal
 
-from agents.slackbot.shared import app, rag_vol
+from agents.slackbot.infra import app, rag_vol
 
 hf_secret = modal.Secret.from_name("hf-secret")
 
@@ -21,6 +21,19 @@ index_image = (
     )
 )
 
-EMBED_BATCH_SIZE = 1024
+# --- Parallelism ---
 N_WORKERS = 10
 WORKERS_PER_GPU = 4
+
+# --- Embedding ---
+EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"
+EMBED_BATCH_SIZE = 1024
+
+# --- Chunking ---
+CHUNK_SIZE = 512
+CHUNK_OVERLAP = 64
+
+# --- ChromaDB ---
+CHROMA_DIR = "/data/rag/chroma"
+CHROMA_COLLECTION = "rag_documents"
+UPSERT_BATCH = 5_000

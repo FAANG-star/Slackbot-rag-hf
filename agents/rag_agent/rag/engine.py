@@ -35,11 +35,29 @@ SYSTEM_PROMPT = (
 
 
 def create_workflow(
-    indexer: Indexer, llm: LLM, memory=None, max_iterations: int = 50
+    indexer: Indexer, llm: LLM, memory=None, max_iterations: int = 10
 ) -> tuple[AgentWorkflow, SearchStats]:
     """Create an AgentWorkflow with a ReActAgent + search/code/list tools."""
     stats = SearchStats()
+    tools = [
+        _search_tool(indexer, stats),
+        _code_tool(),
+        _list_tool(),
+    ]
+    react_agent = ReActAgent(
+        tools=tools,
+        llm=llm.model,
+        system_prompt=SYSTEM_PROMPT,
+        memory=memory,
+        max_iterations=max_iterations,
+        verbose=True,
+    )
+    return AgentWorkflow(agents=[react_agent]), stats
 
+
+# ── Tool builders ─────────────────────────────────────────────────────────────
+
+def _search_tool(indexer: Indexer, stats: SearchStats) -> FunctionTool:
     def search_documents(query: str) -> str:
         """Search indexed documents for relevant information.
 
@@ -54,12 +72,18 @@ def create_workflow(
         print(f"[SEARCH] {query!r} -> {len(nodes)} chunks", file=sys.stderr, flush=True)
         if not nodes:
             return "No relevant documents found for this query."
-        chunks = []
-        for node in nodes:
-            source = node.metadata.get("source", "unknown")
-            chunks.append(f"[Source: {source}]\n{node.get_content()}")
+        chunks = [f"[Source: {n.metadata.get('source', 'unknown')}]\n{n.get_content()}" for n in nodes]
         return "\n\n---\n\n".join(chunks)
 
+    return FunctionTool.from_defaults(
+        fn=search_documents,
+        name="search_documents",
+        description="Search indexed documents for relevant information. "
+        "Use this before answering questions about uploaded files.",
+    )
+
+
+def _code_tool() -> FunctionTool:
     def execute_python_logged(code: str) -> str:
         code = code.replace("\\n", "\n").replace("\\t", "\t")
         print(f"[EXECUTE_PYTHON] code:\n{code}", file=sys.stderr, flush=True)
@@ -67,13 +91,7 @@ def create_workflow(
         print(f"[EXECUTE_PYTHON] output:\n{result}", file=sys.stderr, flush=True)
         return result
 
-    search_tool = FunctionTool.from_defaults(
-        fn=search_documents,
-        name="search_documents",
-        description="Search indexed documents for relevant information. "
-        "Use this before answering questions about uploaded files.",
-    )
-    code_tool = FunctionTool.from_defaults(
+    return FunctionTool.from_defaults(
         fn=execute_python_logged,
         name="execute_python",
         description="Execute Python code in a subprocess. "
@@ -81,19 +99,12 @@ def create_workflow(
         "ALWAYS use this to read files, analyze data, or produce charts. "
         "Pre-installed: pandas, matplotlib, openpyxl, pypdf, python-docx.",
     )
-    list_tool = FunctionTool.from_defaults(
+
+
+def _list_tool() -> FunctionTool:
+    return FunctionTool.from_defaults(
         fn=list_documents,
         name="list_documents",
         description="List all files available in /data/rag/docs/. "
         "Call this first when the user asks about a file, to confirm it exists and get the exact path.",
     )
-
-    react_agent = ReActAgent(
-        tools=[search_tool, code_tool, list_tool],
-        llm=llm.model,
-        system_prompt=SYSTEM_PROMPT,
-        memory=memory,
-        max_iterations=max_iterations,
-        verbose=True,
-    )
-    return AgentWorkflow(agents=[react_agent]), stats

@@ -8,7 +8,7 @@ from pathlib import Path
 import modal
 
 
-class FileManager:
+class Documents:
     """Manages documents on the Modal volume for the RAG pipeline."""
 
     def __init__(self, volume: modal.Volume, docs_dir: Path = Path("/data/rag/docs")):

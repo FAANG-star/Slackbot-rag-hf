@@ -28,6 +28,12 @@ class RagClient:
         self._sandbox = None
         self._stdout = None
 
+    # ── Public API ───────────────────────────────────────────────────────────
+
+    def is_running(self) -> bool:
+        """True if a sandbox is currently connected and alive."""
+        return self._sandbox is not None
+
     def query(self, message: str, sandbox_name: str, on_status=None) -> RagResponse:
         """Send a query, return structured response. Retries once on failure."""
         with self._lock:
@@ -44,30 +50,43 @@ class RagClient:
                     self._reset()
                     if attempt == 1:
                         raise
-            return self._read_and_parse()
+            return self._read_response()
+
+    # ── Sandbox lifecycle ────────────────────────────────────────────────────
 
     def _ensure_sandbox(self, on_status=None):
+        """Attach to an existing sandbox or boot a fresh one."""
         if self._sandbox is not None:
             return
+        if not self._connect_existing():
+            self._boot_sandbox(on_status)
 
-        # Try to reuse an already-running sandbox — avoids 3-min cold start.
-        # server.main is in a stdin read loop with no pending stdout, so
-        # attaching to its stdin/stdout is safe.
+    def _connect_existing(self) -> bool:
+        """Try to reconnect to a named running sandbox. Returns True on success."""
         try:
-            existing = modal.Sandbox.from_name(app_name=app.name, name=SANDBOX_NAME)
-            self._sandbox = existing
-            self._stdout = iter(existing.stdout)
-            print("[RAG] Reconnected to existing sandbox", flush=True)
-            return
+            sb = modal.Sandbox.from_name(app_name=app.name or "", name=SANDBOX_NAME)
         except modal.exception.NotFoundError:
-            pass
+            return False
+        # Name registry lags behind termination — verify it's still alive.
+        if sb.poll() is not None:
+            print("[RAG] Found terminated sandbox in registry, ignoring.", flush=True)
+            try:
+                sb.terminate()
+            except Exception:
+                pass
+            return False
+        self._sandbox = sb
+        self._stdout = iter(sb.stdout)
+        print("[RAG] Reconnected to existing sandbox.", flush=True)
+        return True
 
-        # No existing sandbox — boot a fresh one.
+    def _boot_sandbox(self, on_status=None):
+        """Create a new sandbox and wait for the server init sentinel."""
         if on_status:
-            on_status("starting RAG server...")
+            on_status("loading models...")
         try:
             self._sandbox = modal.Sandbox.create(
-                "python", "-u", "-m", "server.main",
+                "python", "-u", "-m", "server",
                 app=app,
                 image=sandbox_image,
                 workdir="/agent",
@@ -79,36 +98,28 @@ class RagClient:
                 idle_timeout=20 * 60,
             )
         except modal.exception.AlreadyExistsError:
-            # Race: from_name() said not found, but create() says it exists.
-            # Modal's name registry has a propagation delay during termination.
-            # create() confirming existence means from_name() will now find it.
-            existing = modal.Sandbox.from_name(app_name=app.name, name=SANDBOX_NAME)
-            self._sandbox = existing
-            self._stdout = iter(existing.stdout)
-            print("[RAG] Reconnected to sandbox (race recovery)", flush=True)
+            # Race: from_name() saw nothing, but create() found it.
+            # Modal's name registry has propagation delay after termination.
+            if not self._connect_existing():
+                raise RuntimeError("Sandbox AlreadyExistsError but from_name() found nothing.")
             return
         self._stdout = iter(self._sandbox.stdout)
+        self._wait_for_init()
 
-        received = False
-        for line in self._stdout:
-            text = line.rstrip()
-            print(f"[RAG init] {text}", flush=True)
-            if on_status and text:
-                on_status(text.lower())
-            if self._END_TURN in line:
-                received = True
-                break
-        if not received:
-            stderr = ""
-            try:
-                stderr = self._sandbox.stderr.read()
-            except Exception:
-                pass
-            self._sandbox = None
-            self._stdout = None
-            raise RuntimeError(f"RAG process closed before init sentinel.\nstderr: {stderr}")
+    def _wait_for_init(self):
+        """Stream sandbox stdout until the init sentinel."""
+        assert self._stdout is not None
+        try:
+            for line in self._stdout:
+                print(f"[RAG init] {line.rstrip()}", flush=True)
+                if self._END_TURN in line:
+                    return
+        except Exception as exc:
+            raise RuntimeError(f"RAG process crashed during init.\nstderr: {self._read_stderr()}") from exc
+        raise RuntimeError(f"RAG process closed before init sentinel.\nstderr: {self._read_stderr()}")
 
     def _reset(self):
+        """Terminate the sandbox and clear state."""
         if self._sandbox is not None:
             try:
                 self._sandbox.terminate()
@@ -117,7 +128,17 @@ class RagClient:
             self._sandbox = None
         self._stdout = None
 
-    def _read_and_parse(self) -> RagResponse:
+    def _read_stderr(self) -> str:
+        if self._sandbox is None:
+            return ""
+        try:
+            return self._sandbox.stderr.read()
+        except Exception:
+            return ""
+
+    # ── Response parsing ─────────────────────────────────────────────────────
+
+    def _read_response(self) -> RagResponse:
         """Read stdout until END_TURN, parse into RagResponse."""
         lines = []
         for line in self._stdout:

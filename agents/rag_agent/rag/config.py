@@ -22,7 +22,7 @@ CHUNK_OVERLAP = 64
 EMBED_BATCH_SIZE = 256  # texts per GPU forward pass
 
 # --- Retrieval ---
-TOP_K = 6
+TOP_K = 3
 
 # --- History ---
 MAX_HISTORY_TURNS = 10

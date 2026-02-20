@@ -2,10 +2,10 @@
 
 import modal
 
-from agents.slackbot.shared import app, rag_vol
+from agents.slackbot.infra import app, rag_vol
 import agents.ml_agent.sandbox  # noqa: F401  registers @app.function deps
 import agents.rag_agent.sandbox  # noqa: F401  registers @app.function deps
-import agents.rag_agent.indexer_workers  # noqa: F401  registers GPU worker functions
+import agents.index_pipeline  # noqa: F401  registers GPU worker functions
 
 slack_secret = modal.Secret.from_name("slack-secret")
 
@@ -29,8 +29,8 @@ slack_bot_image = (
 class SlackBotService:
     @modal.enter()
     def setup(self):
-        from agents.slackbot.bot import SlackBot
-        from agents.slackbot.services.container import ServiceContainer
+        from agents.slackbot.core.services.slack_bot import SlackBot
+        from agents.slackbot.core.container import ServiceContainer
 
         self._app = SlackBot(ServiceContainer()).create_fastapi_app()
 

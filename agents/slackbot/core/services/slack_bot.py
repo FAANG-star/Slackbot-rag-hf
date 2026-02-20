@@ -5,10 +5,10 @@ import re
 import threading
 from typing import TYPE_CHECKING
 
-from .services.router import MessageContext
+from .router import MessageContext
 
 if TYPE_CHECKING:
-    from .services.container import ServiceContainer
+    from ..container import ServiceContainer
 
 
 class SlackBot:

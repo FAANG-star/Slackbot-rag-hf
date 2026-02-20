@@ -4,7 +4,7 @@ from pathlib import Path
 
 import modal
 
-from agents.slackbot.shared import app, data_vol, trackio_vol, TRACKIO_MOUNT
+from agents.slackbot.infra import app, data_vol, trackio_vol, TRACKIO_MOUNT
 from .proxy import anthropic_proxy
 from .trackio_sync import trackio_syncer
 

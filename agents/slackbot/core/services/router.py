@@ -5,14 +5,32 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable
 
-from .formatter import say_chunked
-
 if TYPE_CHECKING:
-    from .ml_client import MlClient
-    from .rag_client import RagClient
+    from ..clients.ml_client import MlClient
+    from ..clients.rag_client import RagClient
+    from .documents import Documents
+    from agents.index_pipeline.pipeline import IndexPipeline
 
-    from .file_manager import FileManager
-    from agents.rag_agent.indexer_workers.pipeline import IndexPipeline
+_MAX_SLACK_LEN = 3000
+
+
+def _say_chunked(say: Callable[[str], None], text: str) -> None:
+    """Send text to Slack, splitting into ≤3000-char chunks at paragraph boundaries."""
+    if len(text) <= _MAX_SLACK_LEN:
+        say(text)
+        return
+    chunks, current, current_len = [], [], 0
+    for para in text.split("\n\n"):
+        para_len = len(para) + 2
+        if current_len + para_len > _MAX_SLACK_LEN and current:
+            chunks.append("\n\n".join(current))
+            current, current_len = [], 0
+        current.append(para)
+        current_len += para_len
+    if current:
+        chunks.append("\n\n".join(current))
+    for chunk in chunks:
+        say(chunk)
 
 
 @dataclass
@@ -32,7 +50,7 @@ class MessageContext:
 class MessageRouter:
     """Dispatches messages to the appropriate agent or file operation."""
 
-    def __init__(self, rag: RagClient, ml: MlClient, files: FileManager, indexer: IndexPipeline):
+    def __init__(self, rag: RagClient, ml: MlClient, files: Documents, indexer: IndexPipeline):
         self._rag = rag
         self._ml = ml
         self._files = files
@@ -78,19 +96,21 @@ class MessageRouter:
 
     def _do_reindex(self, ctx: MessageContext, force: bool):
         print(f"[router] starting parallel reindex (force={force})", flush=True)
+        def _reload():
+            self._rag.query("reload", ctx.sandbox_name)
         result = self._indexer.reindex(
             force=force,
             on_status=ctx.set_status,
-            reload_fn=lambda: self._rag.query("reload", ctx.sandbox_name),
+            reload_fn=_reload,
         )
         print(f"[router] reindex done: {result[:80]}", flush=True)
-        say_chunked(ctx.say, result)
+        _say_chunked(ctx.say, result)
 
     def _handle_ml(self, ctx: MessageContext):
         ctx.set_status("thinking...")
         msg = ctx.message[3:].strip()
         response = self._ml.run(msg, ctx.sandbox_name)
-        say_chunked(ctx.say, response)
+        _say_chunked(ctx.say, response)
 
     def _handle_remove(self, ctx: MessageContext):
         filename = ctx.message[7:].strip()
@@ -102,10 +122,12 @@ class MessageRouter:
 
     def _handle_rag_query(self, ctx: MessageContext):
         ctx.set_status("Searching...")
+        if not self._rag.is_running():
+            ctx.say("Service is loading servers, this might take a minute...")
         resp = self._rag.query(
             ctx.message, ctx.sandbox_name, on_status=ctx.set_status
         )
-        say_chunked(ctx.say, resp.text)
+        _say_chunked(ctx.say, resp.text)
         if resp.output_files and ctx.client and ctx.channel:
             self._files.upload_output_files(
                 ctx.client, ctx.channel, ctx.thread_ts, resp.output_files

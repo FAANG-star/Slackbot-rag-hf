@@ -23,15 +23,7 @@ def execute_python(code: str) -> str:
         )
     except subprocess.TimeoutExpired:
         return "[Error: Code execution timed out after 120 seconds]"
-
-    parts = []
-    if result.stdout:
-        parts.append(result.stdout)
-    if result.stderr:
-        parts.append(f"[STDERR]\n{result.stderr}")
-    if result.returncode != 0:
-        parts.append(f"[Exit code: {result.returncode}]")
-    return "\n".join(parts).strip() or "[No output]"
+    return _format_result(result)
 
 
 def list_output_files() -> list[str]:
@@ -49,8 +41,18 @@ def list_documents() -> str:
     """
     if not DOCS_DIR.exists():
         return "No documents directory found at /data/rag/docs/"
-    files = sorted(DOCS_DIR.rglob("*"))
-    paths = [str(f) for f in files if f.is_file()]
-    if not paths:
-        return "No files found in /data/rag/docs/"
-    return "\n".join(paths)
+    paths = [str(f) for f in sorted(DOCS_DIR.rglob("*")) if f.is_file()]
+    return "\n".join(paths) if paths else "No files found in /data/rag/docs/"
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _format_result(result: subprocess.CompletedProcess) -> str:
+    parts = []
+    if result.stdout:
+        parts.append(result.stdout)
+    if result.stderr:
+        parts.append(f"[STDERR]\n{result.stderr}")
+    if result.returncode != 0:
+        parts.append(f"[Exit code: {result.returncode}]")
+    return "\n".join(parts).strip() or "[No output]"

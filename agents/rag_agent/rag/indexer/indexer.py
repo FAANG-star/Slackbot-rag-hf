@@ -30,15 +30,7 @@ class Indexer:
         self.parser = DocumentParser()
         self._rebuild_index()
 
-    def _rebuild_index(self):
-        """(Re)create the VectorStoreIndex from the current collection."""
-        vector_store = ChromaVectorStore(chroma_collection=self.store.collection)
-        storage_context = StorageContext.from_defaults(vector_store=vector_store)
-        self.index = VectorStoreIndex.from_vector_store(
-            vector_store,
-            embed_model=self.embed_model,
-            storage_context=storage_context,
-        )
+    # ── Public API ───────────────────────────────────────────────────────────
 
     def reload(self):
         """Reload ChromaDB from volume without re-loading the embedding model."""
@@ -71,19 +63,7 @@ class Indexer:
 
         to_add, to_delete = self.manifest.diff(old, current_files)
         deleted_count = self.store.delete_by_source(to_delete)
-
-        added_count = 0
-        pending = []
-        for _, nodes in self.parser.parse(to_add):
-            pending.extend(nodes)
-            if len(pending) >= CHUNK_SIZE:
-                self.index.insert_nodes(pending)
-                added_count += len(pending)
-                pending = []
-        if pending:
-            self.index.insert_nodes(pending)
-            added_count += len(pending)
-
+        added_count = self._insert_nodes(to_add)
         self.manifest.save(current_files)
         return (self.store.count(), added_count, deleted_count)
 
@@ -92,8 +72,33 @@ class Indexer:
         files = self.manifest.load()
         if not files:
             return "No documents indexed yet."
-
         lines = [f"Index: {len(files)} source(s), {self.store.count()} chunks (ChromaDB)"]
-        for fname in sorted(files):
-            lines.append(f"  - {fname}")
+        lines += [f"  - {fname}" for fname in sorted(files)]
         return "\n".join(lines)
+
+    # ── Helpers ──────────────────────────────────────────────────────────────
+
+    def _rebuild_index(self):
+        """(Re)create the VectorStoreIndex from the current collection."""
+        vector_store = ChromaVectorStore(chroma_collection=self.store.collection)
+        storage_context = StorageContext.from_defaults(vector_store=vector_store)
+        self.index = VectorStoreIndex.from_vector_store(
+            vector_store,
+            embed_model=self.embed_model,
+            storage_context=storage_context,
+        )
+
+    def _insert_nodes(self, filenames: list[str]) -> int:
+        """Parse and insert nodes for the given filenames. Returns count of inserted nodes."""
+        added = 0
+        pending = []
+        for _, nodes in self.parser.parse(filenames):
+            pending.extend(nodes)
+            if len(pending) >= CHUNK_SIZE:
+                self.index.insert_nodes(pending)
+                added += len(pending)
+                pending = []
+        if pending:
+            self.index.insert_nodes(pending)
+            added += len(pending)
+        return added

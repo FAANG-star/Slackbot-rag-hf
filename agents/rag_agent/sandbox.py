@@ -4,7 +4,7 @@ from pathlib import Path
 
 import modal
 
-from agents.slackbot.shared import app, rag_vol
+from agents.slackbot.infra import app, rag_vol
 
 RAG_AGENT_DIR = Path(__file__).parent
 
@@ -16,6 +16,7 @@ sandbox_image = (
     .uv_pip_install(
         "vllm==0.13.0",
         "llama-index-core",
+        "llama-index-llms-openai-like",
         "llama-index-vector-stores-chroma",
         "llama-index-embeddings-huggingface",
         "llama-index-readers-file",
@@ -27,9 +28,9 @@ sandbox_image = (
         "openpyxl",
         "matplotlib",
     )
-    .run_commands("python -c 'from vllm import LLM, SamplingParams; print(\"vllm OK\")'")
-    .run_commands("python -c 'from llama_index.core.agent.workflow import AgentWorkflow, ReActAgent; from chromadb import PersistentClient; print(\"llama-index OK\")'")
-    .env({"IMAGE_VERSION": "54"})  # bump BEFORE add_local_dir to invalidate code layers
+    .run_commands("python -c 'import vllm.entrypoints.openai.api_server; print(\"vllm OK\")'")
+    .run_commands("python -c 'from llama_index.llms.openai_like import OpenAILike; from llama_index.core.agent.workflow import AgentWorkflow, ReActAgent; from chromadb import PersistentClient; print(\"llama-index OK\")'")
+    .env({"IMAGE_VERSION": "62"})  # bump BEFORE add_local_dir to invalidate code layers
     # Models download to volume at runtime (cached across restarts)
     .add_local_dir(str(RAG_AGENT_DIR / "server"), "/agent/server", copy=True)
     .add_local_dir(str(RAG_AGENT_DIR / "rag"), "/agent/rag", copy=True)

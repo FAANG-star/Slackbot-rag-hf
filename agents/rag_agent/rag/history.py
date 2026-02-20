@@ -59,7 +59,14 @@ class HistoryManager:
         return data[-(MAX_HISTORY_TURNS * 2) :]
 
     def _save_json(self, sandbox_name: str, messages: list[ChatMessage]):
-        capped = messages[-(MAX_HISTORY_TURNS * 2) :]
+        # Only persist short user/assistant messages — skip tool calls and search results
+        turns = [
+            m for m in messages
+            if m.role.value in ("user", "assistant")
+            and m.content
+            and len(m.content) < 4000
+        ]
+        capped = turns[-(MAX_HISTORY_TURNS * 2) :]
         data = [{"role": msg.role.value, "content": msg.content} for msg in capped]
         self._json_path(sandbox_name).write_text(json.dumps(data, indent=2))
 

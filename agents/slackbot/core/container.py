@@ -1,12 +1,11 @@
 """Service container — singleton lifecycle for all slackbot services."""
 
-from agents.slackbot.shared import rag_vol
-from .ml_client import MlClient
-from .rag_client import RagClient
-
-from .file_manager import FileManager
-from agents.rag_agent.indexer_workers.pipeline import IndexPipeline
-from .router import MessageRouter
+from agents.slackbot.infra import rag_vol
+from agents.index_pipeline.pipeline import IndexPipeline
+from .clients.ml_client import MlClient
+from .clients.rag_client import RagClient
+from .services.documents import Documents
+from .services.router import MessageRouter
 
 
 class ServiceContainer:
@@ -15,7 +14,7 @@ class ServiceContainer:
     def __init__(self):
         self.rag = RagClient()
         self.ml = MlClient()
-        self.files = FileManager(volume=rag_vol)
+        self.files = Documents(volume=rag_vol)
         self.indexer = IndexPipeline(volume=rag_vol)
         self.router = MessageRouter(
             rag=self.rag, ml=self.ml, files=self.files, indexer=self.indexer
