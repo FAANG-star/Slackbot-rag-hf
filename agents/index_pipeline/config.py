@@ -19,15 +19,17 @@ index_image = (
         "pypdf",
         "python-docx",
     )
+    .run_commands("python -c \"import nltk; nltk.download('punkt_tab'); nltk.download('stopwords')\"")
 )
 
 # --- Parallelism ---
 N_WORKERS = 10
-WORKERS_PER_GPU = 4
+WORKERS_PER_GPU = 1
 
 # --- Embedding ---
 EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"
-EMBED_BATCH_SIZE = 1024
+EMBED_BATCH_SIZE = 1024   # documents per zip-streaming batch
+MODEL_BATCH_SIZE = 64     # chunks per GPU forward pass (fits T4 with WORKERS_PER_GPU=4)
 
 # --- Chunking ---
 CHUNK_SIZE = 512

@@ -127,7 +127,8 @@ class MessageRouter:
         resp = self._rag.query(
             ctx.message, ctx.sandbox_name, on_status=ctx.set_status
         )
-        _say_chunked(ctx.say, resp.text)
+        if resp.text:
+            _say_chunked(ctx.say, resp.text)
         if resp.output_files and ctx.client and ctx.channel:
             self._files.upload_output_files(
                 ctx.client, ctx.channel, ctx.thread_ts, resp.output_files

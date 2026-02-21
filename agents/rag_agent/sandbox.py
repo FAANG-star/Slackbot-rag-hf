@@ -30,7 +30,7 @@ sandbox_image = (
     )
     .run_commands("python -c 'import vllm.entrypoints.openai.api_server; print(\"vllm OK\")'")
     .run_commands("python -c 'from llama_index.llms.openai_like import OpenAILike; from llama_index.core.agent.workflow import AgentWorkflow, ReActAgent; from chromadb import PersistentClient; print(\"llama-index OK\")'")
-    .env({"IMAGE_VERSION": "62"})  # bump BEFORE add_local_dir to invalidate code layers
+    .env({"IMAGE_VERSION": "63"})  # bump BEFORE add_local_dir to invalidate code layers
     # Models download to volume at runtime (cached across restarts)
     .add_local_dir(str(RAG_AGENT_DIR / "server"), "/agent/server", copy=True)
     .add_local_dir(str(RAG_AGENT_DIR / "rag"), "/agent/rag", copy=True)

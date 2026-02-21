@@ -30,7 +30,8 @@ SYSTEM_PROMPT = (
     "- When the user mentions a file: call list_documents first, then execute_python with the exact path.\n"
     "- For document questions: call search_documents first, then answer from results.\n"
     "- Never guess file contents or paths — use tools to check.\n"
-    "- Be concise. Cite sources from search results."
+    "- Be concise. Cite sources from search results.\n"
+    "- Do not use emojis in responses."
 )
 
 

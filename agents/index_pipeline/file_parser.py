@@ -33,6 +33,24 @@ def parse_zip_batched(path: str, source: str, batch_size: int) -> Iterator[list[
             yield batch
 
 
+def read_zip_entries(
+    path: str, entry_names: list[str], source: str, batch_size: int
+) -> Iterator[list[Document]]:
+    """Yield batches of Documents from a specific subset of zip entries."""
+    with zipfile.ZipFile(path) as zf:
+        batch: list[Document] = []
+        for name in entry_names:
+            text = _read_zip_entry(zf, name)
+            if not text or not text.strip():
+                continue
+            batch.append(Document(text=text, metadata={"source": source, "filename": name}))
+            if len(batch) >= batch_size:
+                yield batch
+                batch = []
+        if batch:
+            yield batch
+
+
 def _read_zip_entry(zf: zipfile.ZipFile, name: str) -> str | None:
     """Extract a single zip entry as text (supports PDF and plaintext)."""
     try:

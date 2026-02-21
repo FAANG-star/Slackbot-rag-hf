@@ -75,9 +75,10 @@ class IndexPipeline:
         return [str(p) for p in to_index]
 
     def _embed(self, files: list[str], on_status: Status) -> None:
-        on_status(f"embedding {len(files)} file(s) across GPU workers...")
-        batches, worker_ids = self._make_batches(files)
-        print(f"[embed] spawning {len(batches)} workers (~{math.ceil(len(files) / N_WORKERS)} file(s) each)", flush=True)
+        batches = self._build_batches(files)
+        worker_ids = list(range(len(batches)))
+        on_status(f"embedding {len(files)} file(s) across {len(batches)} GPU workers...")
+        print(f"[embed] spawning {len(batches)} workers", flush=True)
 
         total = 0
         for result in EmbedWorker().embed.map(batches, worker_ids, return_exceptions=True):
@@ -89,10 +90,39 @@ class IndexPipeline:
                 on_status(f"worker-{wid} done: {count:,} chunks (total: {total:,})")
         print(f"[embed] all workers done: {total:,} chunks", flush=True)
 
-    def _make_batches(self, files: list[str]) -> tuple[list[list[str]], list[int]]:
-        chunk_size = math.ceil(len(files) / N_WORKERS)
-        batches = [files[i : i + chunk_size] for i in range(0, len(files), chunk_size)]
-        return batches, list(range(len(batches)))
+    def _build_batches(self, files: list[str]) -> list[dict]:
+        """Split files into per-worker work items.
+
+        Zip files are expanded: their entries are enumerated and distributed
+        across N_WORKERS so each worker gets a slice of entries rather than
+        the whole zip. Regular files are distributed by file count.
+        """
+        import zipfile
+
+        batches: list[dict] = []
+        regular = [f for f in files if not f.endswith(".zip")]
+        zips = [f for f in files if f.endswith(".zip")]
+
+        # Regular files: split across workers
+        if regular:
+            chunk_size = math.ceil(len(regular) / N_WORKERS)
+            for i in range(0, len(regular), chunk_size):
+                batches.append({"type": "files", "paths": regular[i : i + chunk_size]})
+
+        # Zip files: enumerate entries, split entries across workers
+        for zip_path in zips:
+            with zipfile.ZipFile(zip_path) as zf:
+                entries = [n for n in zf.namelist() if not n.endswith("/")]
+            print(f"[embed] {zip_path.split('/')[-1]}: {len(entries):,} entries → {N_WORKERS} workers", flush=True)
+            chunk_size = math.ceil(len(entries) / N_WORKERS)
+            for i in range(0, len(entries), chunk_size):
+                batches.append({
+                    "type": "zip_entries",
+                    "zip_path": zip_path,
+                    "entries": entries[i : i + chunk_size],
+                })
+
+        return batches
 
     def _finalize(self, force: bool, on_status: Status) -> str:
         on_status("writing to ChromaDB...")

@@ -153,21 +153,32 @@ modal run scripts/upload_test_data.py
 
 ### RAG: Wikipedia
 
-Drop a [Wikipedia dump](https://dumps.wikimedia.org/) into the bot — thousands of articles across every topic. Too much for any context window, but the kind of broad knowledge base where semantic search shines.
+The [Simple English Wikipedia dump](https://dumps.wikimedia.org/simplewiki/latest/) is a clean benchmark: ~250,000 articles covering every topic, totaling around 1 GB compressed (~4 GB extracted). Too much for any context window, but exactly the kind of broad knowledge base where semantic search shines.
 
-Upload the zip to the bot in Slack — it extracts and indexes the articles automatically. Then ask questions:
+Upload the zip to the bot in Slack — it extracts and indexes the articles automatically.
+
+**How indexing works:** The pipeline runs in three phases:
+
+1. **Scan** — compares each file's mtime and size against a manifest to find only new or changed files. Already-indexed content is skipped.
+2. **Embed** — files are distributed across 10 parallel GPU workers on T4s. Each worker parses the file, splits text into 512-token chunks with 64-token overlap using a sentence-aware splitter, embeds each chunk with [BGE-large-en-v1.5](https://huggingface.co/BAAI/bge-large-en-v1.5), and upserts to its own ChromaDB shard.
+3. **Finalize** — worker manifests are merged into a single `manifest.json`, and ChromaDB shards are consolidated. The RAG agent reloads the index.
+
+The full zip is 157 MB containing ~242,000 articles. Indexing took **15 minutes** across 10 parallel T4 GPUs.
+
+![Indexing progress message in Slack](assets/rag_index.png)
+*The bot reports indexing progress as it processes each batch of articles.*
+
+Then ask questions:
 
 > **You:** What were the main causes and consequences of the 2008 financial crisis?
 
-The agent searches across thousands of articles, pulls relevant sections from multiple pages, and synthesizes a coherent answer — all on your GPU, nothing sent externally.
+![RAG answer about the 2008 financial crisis](assets/rag_query.png)
+*The agent searches across thousands of articles, pulls relevant sections from multiple pages, and synthesizes a coherent answer — all on your GPU, nothing sent externally.*
 
 > **You:** Plot a timeline of major space exploration milestones from 1957 to 2024.
 
-The agent calls `execute_python` to extract dates and events from the indexed articles, builds a chart with matplotlib, and uploads it to the Slack thread. The kind of analysis that needs both retrieval and computation — neither a context window nor a simple search engine can do this alone.
-
-> **You:** Compare the economic systems described in the articles on capitalism, socialism, and mixed economies.
-
-Search + synthesis across a corpus that would take hours to read through manually.
+![Matplotlib chart of space exploration milestones](assets/rag_chart.png)
+*The agent calls `execute_python` to extract dates and events from indexed articles, builds the chart with matplotlib, and uploads it to the thread.*
 
 ### ML Training
 
