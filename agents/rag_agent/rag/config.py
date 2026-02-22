@@ -10,9 +10,19 @@ HISTORY_DIR = RAG_ROOT / "history"
 OUTPUT_DIR = RAG_ROOT / "output"
 MANIFEST_PATH = CHROMA_DIR / "manifest.json"
 
-# --- Models ---
+# --- LLM backend ---
+LLM_BACKEND = "vllm"  # "vllm" or "ollama"
+LLM_CONTEXT_WINDOW = 16384
+
+# vLLM backend
+VLLM_MODEL = "cognitivecomputations/Qwen3-30B-A3B-AWQ"  # MoE AWQ, ~16GB on A10G, ~3B active params
+
+# Ollama backend
+OLLAMA_MODEL = "qwen3:14b"
+OLLAMA_PORT = 11434
+
+# --- Embeddings ---
 EMBEDDING_MODEL = "BAAI/bge-base-en-v1.5"  # 110M params, 768-dim
-LLM_MODEL = "Qwen/Qwen3-14B-AWQ"  # AWQ 4-bit via vLLM, ~8GB on A10G
 
 # --- Chunking ---
 CHUNK_SIZE = 512

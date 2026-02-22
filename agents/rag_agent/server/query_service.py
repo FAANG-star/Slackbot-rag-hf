@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 
 _THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 
+OUTPUT_FILE_RE = re.compile(r"\[OUTPUT_FILE:(.+?)\]")
+
 
 class QueryService:
     """Runs a single RAG query: memory → workflow → response → persist."""
@@ -27,26 +29,24 @@ class QueryService:
         self.indexer = indexer
         self._history = history
 
-    def run(self, msg: str, sandbox_name: str):
-        """Execute query and print results to stdout."""
+    def run(self, msg: str, session_id: str) -> tuple[str, list[str]]:
+        """Execute query and return (text, output_files)."""
         shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
-        memory = self._history.get(sandbox_name, llm=self.llm.model)
+        memory = self._history.get(session_id, llm=self.llm.model)
         workflow, _ = create_workflow(self.indexer, self.llm, memory=memory)
         response = self._execute(workflow, msg)
-        self._emit_results(response)
-        self._history.persist(sandbox_name)
+        self._history.persist(session_id)
+        return self._parse_response(response)
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 
     def _execute(self, workflow, msg: str):
-        """Run the agent workflow and return the response."""
         async def _run():
             return await workflow.run(user_msg=msg)
         return asyncio.run(_run())
 
-    def _emit_results(self, response):
-        """Print response and any output file paths to stdout."""
+    def _parse_response(self, response) -> tuple[str, list[str]]:
         text = _THINK_RE.sub("", str(response)).strip()
-        print(text, flush=True)
-        for path in list_output_files():
-            print(f"[OUTPUT_FILE:{path}]", flush=True)
+        output_files = [str(p) for p in list_output_files()]
+        display_text = OUTPUT_FILE_RE.sub("", text).strip()
+        return display_text, output_files

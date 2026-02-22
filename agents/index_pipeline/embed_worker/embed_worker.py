@@ -1,12 +1,10 @@
-"""GPU embedding worker — TEI sidecar + ChromaDB persistence."""
+"""GPU embedding worker — TEI sidecar, sends chunks to UpsertWorker."""
 
-import httpx
 import modal
 
 from agents.slackbot.infra import app, rag_vol
 
 from .. import config
-from .helpers.chunk_store import ChunkStore
 from .helpers.file_parser import FileParser
 from .helpers.tei_server import TeiServer
 
@@ -20,7 +18,7 @@ from .helpers.tei_server import TeiServer
     env={
         "HF_HOME": "/data/hf-cache",
         "HUGGINGFACE_HUB_CACHE": "/data/hf-cache",
-        "WORKER_VERSION": "16",
+        "WORKER_VERSION": "18",
     },
 )
 @modal.concurrent(max_inputs=config.WORKERS_PER_GPU)
@@ -28,21 +26,20 @@ class EmbedWorker:
 
     @modal.enter()
     def _setup(self):
+        import httpx
         from llama_index.core.node_parser import TokenTextSplitter
 
         self._tei = TeiServer(config.EMBEDDING_MODEL, config.TEI_PORT, config.TEI_MAX_BATCH)
         self._tei.start()
         self._splitter = TokenTextSplitter(chunk_size=config.CHUNK_SIZE, chunk_overlap=config.CHUNK_OVERLAP)
-        self._store = ChunkStore(config.CHROMA_DIR, config.CHROMA_COLLECTION, rag_vol)
         self._parser = FileParser(embed_fn=self._chunk_and_embed)
         self._http = httpx.Client(timeout=120.0)
 
     @modal.method()
-    def embed(self, work: dict, worker_id: int = 0) -> tuple[int, int]:
-        """Parse, chunk, embed, and persist. Returns (worker_id, chunk_count)."""
-        total, pending = self._parser.embed(work)
-        self._store.flush(pending, worker_id)
-        self._store.write_manifest(worker_id, work)
+    def embed(self, work: dict, worker_id: int, upsert_worker) -> tuple[int, int]:
+        """Parse, chunk, embed, fire chunks to upsert worker. Returns (worker_id, chunk_count)."""
+        total, chunks = self._parser.embed(work)
+        upsert_worker.receive.spawn(chunks, worker_id, work)
         return worker_id, total
 
     def _chunk_and_embed(self, docs: list) -> tuple[int, list]:

@@ -84,10 +84,10 @@ class SlackBot:
             subtype = event.get("subtype")
             is_im = event.get("channel_type") == "im"
             print(f"[bot] message: subtype={subtype} is_im={is_im} files={len(event.get('files', []))} text={event.get('text', '')[:60]!r}", flush=True)
-            # Allow: plain DMs and file_share (DM or channel)
-            if subtype and subtype != "file_share":
+            # Only handle DMs here; channel messages are handled by handle_mention
+            if not is_im:
                 return
-            if not is_im and not event.get("files"):
+            if subtype and subtype != "file_share":
                 return
             channel = event["channel"]
             thread_ts = event.get("thread_ts", event["ts"])

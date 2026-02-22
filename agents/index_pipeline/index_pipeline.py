@@ -7,7 +7,7 @@ from typing import Callable
 import modal
 
 from .config import CHROMA_DIR, N_WORKERS, WORKERS_PER_GPU
-from .embed_worker import EmbedWorker
+from .embed_worker import EmbedWorker, UpsertWorker
 from .pipeline.batch_builder import BatchBuilder
 from .pipeline.finalize import finalize_index
 from .pipeline.scanner import Scanner
@@ -34,34 +34,43 @@ class IndexPipeline:
         status = on_status or (lambda _: None)
 
         with self._lock:
+            upsert = UpsertWorker()
+
             # 1. Scan for new/changed documents
             status("Looking for new documents...")
             files = self._scanner.scan(force)
             if not files:
                 return self._scanner.empty_result()
 
-            # 2. Distribute across GPU workers
-            self._embed(files, status)
+            # 2. Reset collection if force reindex
+            if force:
+                upsert.reset.remote()
 
-            # 3. Merge manifests and build final index
+            # 3. Distribute across GPU workers
+            self._embed(files, status, upsert)
+
+            # 4. Wait for all upserts to complete
             status("Building search index...")
-            result = finalize_index.remote(force)
+            upsert.flush.remote()
 
-            # 4. Reload RAG agent if callback provided
+            # 5. Merge manifests and report
+            result = finalize_index.remote()
+
+            # 6. Reload RAG agent if callback provided
             if reload_fn:
                 status("Finishing up...")
                 reload_fn()
 
             return result
 
-    def _embed(self, files: list[str], status: StatusFn) -> None:
+    def _embed(self, files: list[str], status: StatusFn, upsert: UpsertWorker) -> None:
         """Distribute files across GPU workers and report progress."""
         batches, doc_count = self._batch_builder.build(files)
         status(f"Processing {doc_count:,} documents...")
 
-        # Fan out to GPU workers
+        # Fan out to GPU workers, passing the upsert worker instance
         worker_results = EmbedWorker().embed.map(
-            batches, range(len(batches)), return_exceptions=True
+            batches, range(len(batches)), [upsert] * len(batches), return_exceptions=True
         )
 
         # Collect results and report progress

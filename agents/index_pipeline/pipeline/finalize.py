@@ -12,33 +12,17 @@ _MANIFEST_PATH = _CHROMA_DIR / "manifest.json"
 
 
 @app.function(image=index_image, volumes={"/data": rag_vol}, timeout=60 * 60)
-def finalize_index(force: bool = False) -> str:
+def finalize_index() -> str:
     import chromadb
 
     _CHROMA_DIR.mkdir(parents=True, exist_ok=True)
-    client = chromadb.PersistentClient(path=CHROMA_DIR)
-
-    if force:
-        _reset_collection(client)
-
     manifest = _merge_worker_manifests()
-    chunks = client.get_or_create_collection(CHROMA_COLLECTION).count()
+    chunks = chromadb.PersistentClient(path=CHROMA_DIR).get_or_create_collection(CHROMA_COLLECTION).count()
 
     files = f"{len(manifest)} file{'s' if len(manifest) != 1 else ''}"
     summary = f"Done! {chunks:,} searchable passages from {files}."
     print(summary, flush=True)
     return summary
-
-
-def _reset_collection(client) -> None:
-    try:
-        client.delete_collection(CHROMA_COLLECTION)
-        print("Deleted existing collection.", flush=True)
-    except Exception:
-        pass
-    for f in _CHROMA_DIR.glob("manifest*.json"):
-        f.unlink()
-    rag_vol.commit()
 
 
 def _merge_worker_manifests() -> dict:

@@ -8,7 +8,7 @@ A Slack bot connected to two secure AI agents:
 
 2. **ML agent** — a Claude agent that trains and runs HuggingFace models on a GPU sandbox, without ever being exposed to your API keys.
 
-Plus, there are no idle compute costs. Tagging the bot cold-starts a GPU quickly thanks to Modal's infrastructure.
+Plus, there are no idle compute costs. Tagging the bot cold-starts the RAG agent in **~10 seconds** thanks to Modal's GPU memory snapshots — on first deploy the model loads once (~2 min), then weights are checkpointed to CPU RAM. Every subsequent cold start restores them to GPU in under 1 second.
 
 - [Why This Exists](#why-this-exists)
 - [Features](#features)
@@ -32,7 +32,7 @@ This repo includes a slackbot connected to two secure AI agents.
 
 2. HuggingFace bot: secure claude agent that can train and/or run huggingface models and return results. Securely without being exposed to secrets.  
 
-You also don't need to spend money on idle compute. Tagging the bot will cold-start a GPU with Modal's superfast file system. 
+You also don't need to spend money on idle compute. Tagging the bot cold-starts the RAG agent in ~10 seconds via GPU memory snapshots — on first deploy the model loads once (~2 min), then every subsequent cold start restores weights to GPU in under 1 second.
 
 **How it works:** Share a file in Slack → the bot downloads it to a Modal volume → the indexer parses it into text, splits it into chunks (512 tokens each), and embeds each chunk with BGE-large on GPU → embeddings are stored in ChromaDB. When you ask a question, the ReAct agent retrieves the top-k most similar chunks, uses them as context, and generates an answer with the local LLM. Your files, embeddings, and queries never leave the GPU container.
 
@@ -46,7 +46,7 @@ Works in DMs (via the Slack [Assistant](https://api.slack.com/docs/apps/ai) prot
 
 ### RAG Agent — Local LLM on GPU
 
-A fully local RAG pipeline running [Qwen3-14B](https://huggingface.co/Qwen/Qwen3-14B-AWQ) (4-bit AWQ) on an A10G GPU via [vLLM](https://github.com/vllm-project/vllm). No external API calls for inference. Documents are indexed with [ChromaDB](https://www.trychroma.com/) and queried through a [LlamaIndex](https://www.llamaindex.ai/) ReAct agent with three tools:
+A fully local RAG pipeline running [Qwen3-30B-A3B](https://huggingface.co/cognitivecomputations/Qwen3-30B-A3B-AWQ) (4-bit AWQ, MoE) on an A10G GPU via [vLLM](https://github.com/vllm-project/vllm). No external API calls for inference. Documents are indexed with [ChromaDB](https://www.trychroma.com/) and queried through a [LlamaIndex](https://www.llamaindex.ai/) ReAct agent with three tools:
 
 - **`search_documents`** — semantic search over indexed documents using [BGE-large](https://huggingface.co/BAAI/bge-large-en-v1.5) embeddings
 - **`execute_python`** — runs Python code for data analysis, chart generation, file processing (pandas, matplotlib, openpyxl pre-installed)
@@ -82,7 +82,7 @@ Everything deploys as a single Modal app. One `modal deploy` command and you're 
 
 The **Slack bot** is a FastAPI + slack-bolt server that stays warm and routes messages. Plain text and file uploads go to the RAG agent. Messages prefixed with `hf:` go to the ML training agent.
 
-The **RAG sandbox** runs on an A10G GPU. Models load once into VRAM and stay loaded — the process is long-lived, communicating over stdin/stdout with JSON messages. vLLM serves the LLM, ChromaDB stores embeddings, and a ReAct agent orchestrates search and code execution. Documents never leave this container.
+The **RAG agent** runs as a Modal class on an A10G GPU. vLLM serves [Qwen3-30B-A3B-AWQ](https://huggingface.co/cognitivecomputations/Qwen3-30B-A3B-AWQ) (a 30B MoE model with ~3B active params, fitting comfortably in 16GB VRAM), ChromaDB stores embeddings, and a LlamaIndex ReAct agent orchestrates search and code execution. Documents never leave this container. GPU memory snapshots reduce cold starts to ~10 seconds: on first deploy the model loads into VRAM (~2 min), warms up, then offloads weights to CPU RAM before the snapshot is taken. Subsequent cold starts restore from the snapshot and move weights back to GPU in under 1 second.
 
 The **ML sandbox** runs on an A10 GPU. Each request launches a Claude Agent SDK session that can write code, install packages, and train models. It talks to the Anthropic API through a **proxy container** that intercepts requests and swaps the sandbox's fake key for the real one. The sandbox never sees your Anthropic API key.
 
@@ -160,10 +160,10 @@ Upload the zip to the bot in Slack — it extracts and indexes the articles auto
 **How indexing works:** The pipeline runs in three phases:
 
 1. **Scan** — compares each file's mtime and size against a manifest to find only new or changed files. Already-indexed content is skipped.
-2. **Embed** — files are distributed across 10 parallel GPU workers on T4s. Each worker parses the file, splits text into 512-token chunks with 64-token overlap using a sentence-aware splitter, embeds each chunk with [BGE-large-en-v1.5](https://huggingface.co/BAAI/bge-large-en-v1.5), and upserts to its own ChromaDB shard.
+2. **Embed** — files are distributed across 8 parallel workers on A10G GPUs, with up to 4 workers sharing each GPU concurrently (`@modal.concurrent(max_inputs=4)`). Each worker runs a [TEI](https://github.com/huggingface/text-embeddings-inference) embedding server as a sidecar subprocess, parses files, splits text into 512-token chunks with 64-token overlap using a sentence-aware splitter, embeds each chunk with [BGE-base-en-v1.5](https://huggingface.co/BAAI/bge-base-en-v1.5), and upserts to its own ChromaDB shard.
 3. **Finalize** — worker manifests are merged into a single `manifest.json`, and ChromaDB shards are consolidated. The RAG agent reloads the index.
 
-The full zip is 157 MB containing ~242,000 articles. Indexing took **30 minutes** across 10 parallel T4 GPUs.
+The full zip is 157 MB (551 MB uncompressed) containing ~242,000 articles. Indexing took **30 minutes** across 8 parallel A10G workers.
 
 ![Indexing progress message in Slack](assets/rag_index.png)
 *The bot reports indexing progress as it processes each batch of articles.*
@@ -211,6 +211,7 @@ modal run scripts/debug_rag.py --test csv       # test CSV analysis
 
 ## Credits
 
+- **[Qwen3-30B-A3B-AWQ](https://huggingface.co/cognitivecomputations/Qwen3-30B-A3B-AWQ)** — AWQ quantization by [Cognitive Computations](https://huggingface.co/cognitivecomputations). Based on [Qwen3-30B-A3B](https://huggingface.co/Qwen/Qwen3-30B-A3B) by Alibaba Cloud.
 - **transformers skill** — Originally by [jimmc414](https://github.com/jimmc414), from [Kosmos](https://github.com/jimmc414/Kosmos/tree/master/kosmos-claude-scientific-skills/scientific-skills/transformers). Modified to integrate Trackio.
 - **hugging-face-trackio skill** — From the official [Hugging Face Skills](https://github.com/huggingface/skills) repo. Licensed under Apache 2.0.
 - **Modal sandbox architecture** — Based on the [Claude Slack GIF Creator](https://modal.com/docs/examples/claude-slack-gif-creator) example from Modal's docs.

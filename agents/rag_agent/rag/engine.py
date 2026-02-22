@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from .indexer import Indexer
 
 SYSTEM_PROMPT = (
+    "/no_think\n"
     "You are a document assistant with three tools.\n\n"
     "**list_documents()** — lists all files in /data/rag/docs/. "
     "Call this first when the user mentions a file, to confirm it exists and get the exact path.\n\n"

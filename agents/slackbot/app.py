@@ -8,7 +8,8 @@ from agents.slackbot.clients import RagClient, MlClient
 from agents.slackbot.services import Documents, MessageRouter, SlackBot
 
 import agents.ml_agent.sandbox  # noqa: F401  registers @app.function deps
-import agents.rag_agent.sandbox  # noqa: F401  registers @app.function deps
+import agents.rag_agent.infra  # noqa: F401  registers _prebuild @app.function
+import agents.rag_agent.app  # noqa: F401  registers RagService @app.cls
 
 slack_secret = modal.Secret.from_name("slack-secret")
 

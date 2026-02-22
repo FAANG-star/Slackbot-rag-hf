@@ -97,7 +97,7 @@ class MessageRouter:
     def _do_reindex(self, ctx: MessageContext, force: bool):
         print(f"[router] starting parallel reindex (force={force})", flush=True)
         def _reload():
-            self._rag.query("reload", ctx.sandbox_name)
+            self._rag.command("reload")
         result = self._indexer.reindex(
             force=force,
             on_status=ctx.set_status,
