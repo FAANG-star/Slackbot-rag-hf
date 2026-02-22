@@ -3,12 +3,7 @@
 import os
 import re
 import threading
-from typing import TYPE_CHECKING
-
-from .router import MessageContext
-
-if TYPE_CHECKING:
-    from ..container import ServiceContainer
+from .router import MessageContext, MessageRouter
 
 
 class SlackBot:
@@ -18,8 +13,8 @@ class SlackBot:
         {"title": "ML training", "message": "hf: Help me fine-tune a model on HuggingFace"},
     ]
 
-    def __init__(self, container: "ServiceContainer"):
-        self._router = container.router
+    def __init__(self, router: MessageRouter):
+        self._router = router
 
     def create_fastapi_app(self):
         from fastapi import FastAPI, Request

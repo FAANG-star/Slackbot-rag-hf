@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from ..clients.ml_client import MlClient
     from ..clients.rag_client import RagClient
     from .documents import Documents
-    from agents.index_pipeline.pipeline import IndexPipeline
+    from agents.index_pipeline import IndexPipeline
 
 _MAX_SLACK_LEN = 3000
 
