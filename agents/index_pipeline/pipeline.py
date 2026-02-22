@@ -9,6 +9,7 @@ from typing import Callable
 import modal
 
 from agents.index_pipeline import EmbedWorker, N_WORKERS, finalize_index
+from agents.index_pipeline.config import WORKERS_PER_GPU
 from agents.index_pipeline.config import CHROMA_DIR
 
 _MANIFEST_PATH = Path(CHROMA_DIR) / "manifest.json"
@@ -41,10 +42,10 @@ class IndexPipeline:
                 return self._empty_result()
 
             print("[pipeline] === embed ===", flush=True)
-            self._embed(files, _status)
+            doc_count = self._embed(files, _status)
 
             print("[pipeline] === finalize ===", flush=True)
-            result = self._finalize(force, _status)
+            result = self._finalize(force, doc_count, _status)
 
             if reload_fn:
                 print("[pipeline] === reload ===", flush=True)
@@ -74,11 +75,12 @@ class IndexPipeline:
             print(f"[scan]   {p.name}", flush=True)
         return [str(p) for p in to_index]
 
-    def _embed(self, files: list[str], on_status: Status) -> None:
-        batches = self._build_batches(files)
+    def _embed(self, files: list[str], on_status: Status) -> int:
+        """Run embedding workers. Returns total document count."""
+        batches, doc_count = self._build_batches(files)
         worker_ids = list(range(len(batches)))
-        on_status(f"embedding {len(files)} file(s) across {len(batches)} GPU workers...")
-        print(f"[embed] spawning {len(batches)} workers", flush=True)
+        on_status(f"embedding {doc_count:,} documents across {len(batches)} GPU workers...")
+        print(f"[embed] spawning {len(batches)} workers for {doc_count:,} documents", flush=True)
 
         total = 0
         for result in EmbedWorker().embed.map(batches, worker_ids, return_exceptions=True):
@@ -89,23 +91,27 @@ class IndexPipeline:
                 total += count
                 on_status(f"worker-{wid} done: {count:,} chunks (total: {total:,})")
         print(f"[embed] all workers done: {total:,} chunks", flush=True)
+        return doc_count
 
-    def _build_batches(self, files: list[str]) -> list[dict]:
-        """Split files into per-worker work items.
+    def _build_batches(self, files: list[str]) -> tuple[list[dict], int]:
+        """Split files into per-worker work items. Returns (batches, total_doc_count).
 
         Zip files are expanded: their entries are enumerated and distributed
-        across N_WORKERS so each worker gets a slice of entries rather than
+        across all GPU slots so each worker gets a slice of entries rather than
         the whole zip. Regular files are distributed by file count.
         """
         import zipfile
 
+        n_batches = N_WORKERS * WORKERS_PER_GPU
         batches: list[dict] = []
+        doc_count = 0
         regular = [f for f in files if not f.endswith(".zip")]
         zips = [f for f in files if f.endswith(".zip")]
 
         # Regular files: split across workers
         if regular:
-            chunk_size = math.ceil(len(regular) / N_WORKERS)
+            doc_count += len(regular)
+            chunk_size = math.ceil(len(regular) / n_batches)
             for i in range(0, len(regular), chunk_size):
                 batches.append({"type": "files", "paths": regular[i : i + chunk_size]})
 
@@ -113,8 +119,9 @@ class IndexPipeline:
         for zip_path in zips:
             with zipfile.ZipFile(zip_path) as zf:
                 entries = [n for n in zf.namelist() if not n.endswith("/")]
-            print(f"[embed] {zip_path.split('/')[-1]}: {len(entries):,} entries → {N_WORKERS} workers", flush=True)
-            chunk_size = math.ceil(len(entries) / N_WORKERS)
+            doc_count += len(entries)
+            print(f"[embed] {zip_path.split('/')[-1]}: {len(entries):,} entries → {n_batches} batches across {N_WORKERS} GPUs", flush=True)
+            chunk_size = math.ceil(len(entries) / n_batches)
             for i in range(0, len(entries), chunk_size):
                 batches.append({
                     "type": "zip_entries",
@@ -122,12 +129,12 @@ class IndexPipeline:
                     "entries": entries[i : i + chunk_size],
                 })
 
-        return batches
+        return batches, doc_count
 
-    def _finalize(self, force: bool, on_status: Status) -> str:
-        on_status("writing to ChromaDB...")
+    def _finalize(self, force: bool, doc_count: int, on_status: Status) -> str:
+        on_status("finalizing index...")
         print("[finalize] merging worker manifests...", flush=True)
-        result = finalize_index.remote(force)
+        result = finalize_index.remote(force, doc_count)
         print(f"[finalize] {result}", flush=True)
         return result
 

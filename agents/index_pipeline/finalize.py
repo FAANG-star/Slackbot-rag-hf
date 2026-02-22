@@ -12,14 +12,15 @@ _MANIFEST_PATH = _CHROMA_DIR / "manifest.json"
 
 
 @app.function(image=index_image, volumes={"/data": rag_vol}, timeout=60 * 60)
-def finalize_index(force: bool = False) -> str:
+def finalize_index(force: bool = False, doc_count: int = 0) -> str:
     """Merge per-worker manifest files into manifest.json and report summary."""
     _CHROMA_DIR.mkdir(parents=True, exist_ok=True)
     if force:
         _reset_collection()
     manifest = _merge_worker_manifests()
-    total = _collection_count()
-    summary = f"Indexed {total:,} chunks from {len(manifest)} file(s)."
+    chunks = _collection_count()
+    docs = f" from {doc_count:,} documents" if doc_count else ""
+    summary = f"Indexed {chunks:,} chunks{docs} ({len(manifest)} source file(s))."
     print(summary, flush=True)
     return summary
 

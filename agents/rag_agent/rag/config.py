@@ -11,7 +11,7 @@ OUTPUT_DIR = RAG_ROOT / "output"
 MANIFEST_PATH = CHROMA_DIR / "manifest.json"
 
 # --- Models ---
-EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"  # 335M params, 1024-dim, top MTEB
+EMBEDDING_MODEL = "BAAI/bge-base-en-v1.5"  # 110M params, 768-dim
 LLM_MODEL = "Qwen/Qwen3-14B-AWQ"  # AWQ 4-bit via vLLM, ~8GB on A10G
 
 # --- Chunking ---

@@ -163,7 +163,7 @@ Upload the zip to the bot in Slack — it extracts and indexes the articles auto
 2. **Embed** — files are distributed across 10 parallel GPU workers on T4s. Each worker parses the file, splits text into 512-token chunks with 64-token overlap using a sentence-aware splitter, embeds each chunk with [BGE-large-en-v1.5](https://huggingface.co/BAAI/bge-large-en-v1.5), and upserts to its own ChromaDB shard.
 3. **Finalize** — worker manifests are merged into a single `manifest.json`, and ChromaDB shards are consolidated. The RAG agent reloads the index.
 
-The full zip is 157 MB containing ~242,000 articles. Indexing took **15 minutes** across 10 parallel T4 GPUs.
+The full zip is 157 MB containing ~242,000 articles. Indexing took **30 minutes** across 10 parallel T4 GPUs.
 
 ![Indexing progress message in Slack](assets/rag_index.png)
 *The bot reports indexing progress as it processes each batch of articles.*
