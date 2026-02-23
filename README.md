@@ -8,8 +8,6 @@ This Slackbot allows you to deploy two secure and cost-efficient agentic workflo
 
 Thanks to [Modal GPU snapshots](https://modal.com/docs/guide/memory-snapshot) there are no idle compute costs. Tagging the bot cold-starts within **~12 seconds** — on first deploy the model loads once (~2 min), then weights are checkpointed to CPU RAM. Every subsequent cold start restores from the snapshot and moves weights back to GPU in ~1 second.
 
-![Cold start times](assets/cold-starts.png)
-
 - [Why This Exists](#why-this-exists)
 - [Features](#features)
 - [Architecture](#architecture)
@@ -156,17 +154,11 @@ Upload the zip to the bot in Slack — it extracts and indexes the articles auto
 2. **Embed** — files are distributed across 8 parallel workers on A10G GPUs, with up to 4 workers sharing each GPU concurrently (`@modal.concurrent(max_inputs=4)`). Each worker runs a [TEI](https://github.com/huggingface/text-embeddings-inference) embedding server as a sidecar subprocess, parses files, splits text into 1024-token chunks with 128-token overlap using a sentence-aware splitter, embeds each chunk with [BGE-base-en-v1.5](https://huggingface.co/BAAI/bge-base-en-v1.5), and upserts to its own ChromaDB shard.
 3. **Finalize** — worker manifests are merged into a single `manifest.json`, and ChromaDB shards are consolidated. The RAG agent reloads the index.
 
-The subset zip is 31 MB (54 MB uncompressed) containing ~48,000 articles.
+The subset zip is 31 MB (54 MB uncompressed) containing ~48,000 articles, producing **53,512 searchable passages**. Indexing took **17 minutes**: ~1.5 minutes for GPU embedding across 8 parallel workers, and the remainder loading shards into ChromaDB.
 
-![Indexing progress message in Slack](assets/rag_index.png)
-*The bot reports indexing progress as it processes each batch of articles.*
+![RAG demo](assets/rag.png)
 
-Then ask questions:
-
-> **You:** Plot a timeline of major space exploration milestones from 1957 to 2024.
-
-![Matplotlib chart of space exploration milestones](assets/rag_chart.png)
-*The agent calls `execute_python` to extract dates and events from indexed articles, builds the chart with matplotlib, and uploads it to the thread.*
+![Cold start times](assets/cold-starts.png)
 
 ### ML Training
 
