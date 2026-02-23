@@ -38,7 +38,7 @@ class EmbedWorker:
     @modal.method()
     def embed(self, work: dict, worker_id: int) -> tuple[int, int]:
         """Parse, chunk, embed, fire chunks to upsert worker. Returns (worker_id, chunk_count)."""
-        from agents.index_pipeline.embed_worker.upsert_worker import UpsertWorker
+        from agents.index_pipeline.upsert_worker import UpsertWorker
         total, chunks = self._parser.embed(work)
         UpsertWorker().receive.spawn(chunks, worker_id, work)
         return worker_id, total

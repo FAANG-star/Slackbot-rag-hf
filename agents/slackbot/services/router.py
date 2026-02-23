@@ -96,15 +96,16 @@ class MessageRouter:
 
     def _do_reindex(self, ctx: MessageContext, force: bool):
         print(f"[router] starting parallel reindex (force={force})", flush=True)
-        def _reload():
-            self._rag.command("reload")
+        slack = {"channel": ctx.channel, "thread_ts": ctx.thread_ts} if ctx.channel else None
         result = self._indexer.reindex(
             force=force,
             on_status=ctx.set_status,
-            reload_fn=_reload,
+            slack=slack,
         )
-        print(f"[router] reindex done: {result[:80]}", flush=True)
-        _say_chunked(ctx.say, result)
+        if result:
+            _say_chunked(ctx.say, result)
+        else:
+            ctx.say("Indexing started — I'll post updates here as it progresses.")
 
     def _handle_ml(self, ctx: MessageContext):
         ctx.set_status("thinking...")

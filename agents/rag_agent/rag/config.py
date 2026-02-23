@@ -15,7 +15,7 @@ LLM_BACKEND = "vllm"  # "vllm" or "ollama"
 LLM_CONTEXT_WINDOW = 16384
 
 # vLLM backend
-VLLM_MODEL = "cognitivecomputations/Qwen3-30B-A3B-AWQ"  # MoE AWQ, ~16GB on A10G, ~3B active params
+VLLM_MODEL = "Qwen/Qwen3-14B-AWQ"  # AWQ 4-bit, ~8GB on A10G
 
 # Ollama backend
 OLLAMA_MODEL = "qwen3:14b"

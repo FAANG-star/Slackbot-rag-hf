@@ -28,7 +28,7 @@ image = (
         "matplotlib",
     )
     .run_commands("python -c 'from llama_index.llms.openai_like import OpenAILike; from chromadb import PersistentClient; print(\"OK\")'")
-    .env({"IMAGE_VERSION": "85", "TORCHINDUCTOR_COMPILE_THREADS": "1", "VLLM_SERVER_DEV_MODE": "1", "TORCH_NCCL_ENABLE_MONITORING": "0"})  # bump BEFORE add_local_dir to invalidate code layers
+    .env({"IMAGE_VERSION": "92", "TORCHINDUCTOR_COMPILE_THREADS": "1", "VLLM_SERVER_DEV_MODE": "1", "TORCH_NCCL_ENABLE_MONITORING": "0"})  # bump BEFORE add_local_dir to invalidate code layers
     # Models download to volume at runtime (cached across restarts)
     .add_local_dir(str(RAG_AGENT_DIR / "server"), "/agent/server", copy=True)
     .add_local_dir(str(RAG_AGENT_DIR / "rag"), "/agent/rag", copy=True)

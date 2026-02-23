@@ -8,7 +8,7 @@ import urllib.request
 
 from llama_index.llms.openai_like import OpenAILike
 
-from ..config import LLM_CONTEXT_WINDOW, OLLAMA_MODEL, OLLAMA_PORT
+from ...config import LLM_CONTEXT_WINDOW, OLLAMA_MODEL, OLLAMA_PORT
 
 _BASE_URL = f"http://localhost:{OLLAMA_PORT}/v1"
 

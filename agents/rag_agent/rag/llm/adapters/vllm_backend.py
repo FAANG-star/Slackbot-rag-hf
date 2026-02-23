@@ -9,7 +9,7 @@ import time
 import requests
 from llama_index.llms.openai_like import OpenAILike
 
-from ..config import LLM_CONTEXT_WINDOW, VLLM_MODEL
+from ...config import LLM_CONTEXT_WINDOW, VLLM_MODEL
 
 VLLM_PORT = 8000
 _BASE_URL = f"http://localhost:{VLLM_PORT}/v1"
@@ -80,7 +80,7 @@ class VllmBackend:
             "--download-dir", "/data/hf-cache",
             "--dtype", "auto",
             "--quantization", "awq_marlin",
-            "--gpu-memory-utilization", "0.85",
+            "--gpu-memory-utilization", "0.90",
             "--max-model-len", str(LLM_CONTEXT_WINDOW),
             "--enforce-eager",
             "--enable-sleep-mode",

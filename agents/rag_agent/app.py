@@ -32,6 +32,15 @@ class RagService:
         """After snapshot restore: move weights back to GPU."""
         self._container.llm.wake_up()
 
+    @modal.web_server(port=8000, startup_timeout=600)
+    def serve(self):
+        """vLLM subprocess already listening on port 8000."""
+        pass
+
+    @modal.exit()
+    def stop(self):
+        self._container.llm.terminate()
+
     @modal.method()
     def query(self, message: str, session_id: str) -> tuple[str, list[str]]:
         """Run a RAG query, return (text, output_files)."""
@@ -42,7 +51,3 @@ class RagService:
         """Dispatch a command (reload/reindex/status/clear), return output."""
         from server.commands import dispatch
         return dispatch(cmd, self._container)
-
-    @modal.exit()
-    def stop(self):
-        self._container.llm._backend.terminate()
