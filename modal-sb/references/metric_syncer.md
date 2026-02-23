@@ -62,6 +62,8 @@ Key details:
 - `last_mtimes` persists across poll cycles so unchanged files are skipped
 - The volume mount path matches trackio's default (`~/.cache/huggingface/trackio`) so `trackio.sync()` finds `.db` files without symlinks
 
+**Important caveat:** `trackio.sync()` ignores the `TRACKIO_DIR` environment variable — it always looks for `.db` files in `~/.cache/huggingface/trackio/` regardless of what `TRACKIO_DIR` is set to. The `TRACKIO_DIR` env var only affects `trackio.init()` (where the `.db` is written). This is why the volume must be mounted at `TRACKIO_MOUNT = "/root/.cache/huggingface/trackio"` — so both `trackio.init()` and `trackio.sync()` agree on the path.
+
 ## Modal Function
 
 Spawned by `create_sandbox()` before the sandbox starts, runs until the app exits:
@@ -95,7 +97,7 @@ from pathlib import Path
 
 import modal
 
-from .shared import app, trackio_vol, TRACKIO_MOUNT
+from .infra import app, trackio_vol, TRACKIO_MOUNT
 
 syncer_secret = modal.Secret.from_name("hf-secret")
 syncer_image = modal.Image.debian_slim(python_version="3.11").pip_install("trackio")

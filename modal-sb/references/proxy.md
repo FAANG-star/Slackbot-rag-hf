@@ -18,7 +18,7 @@ POST /v1/messages              1. Extract x-api-key header
 ```python
 import os
 import modal
-from .shared import app
+from .infra import app
 
 proxy_secret = modal.Secret.from_name("anthropic-secret")
 proxy_image = modal.Image.debian_slim(python_version="3.12").pip_install("httpx", "fastapi")
@@ -72,7 +72,7 @@ return StreamingResponse(pipe(), media_type="text/event-stream")
 
 import os
 import modal
-from .shared import app
+from .infra import app
 
 proxy_secret = modal.Secret.from_name("anthropic-secret")
 proxy_image = modal.Image.debian_slim(python_version="3.12").pip_install("httpx", "fastapi")

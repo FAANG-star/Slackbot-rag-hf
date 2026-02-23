@@ -9,8 +9,7 @@ Build a secure Modal sandbox that runs a Claude agent. The agent never holds the
 
 ## Architecture
 
-- **Local CLI** (`app.py`) — creates the sandbox, spawns the syncer, and manages a multi-turn REPL over stdin/stdout with an `END_TURN` sentinel
-- **Sandbox** (GPU, `github-secret`) — runs `agent.py` with the Claude Agent SDK. Mounts two volumes: `/data` for models, datasets, and checkpoints; `/trackio` for metric `.db` files. Calls the Anthropic API through the proxy via `ANTHROPIC_BASE_URL`
+- **Sandbox** (GPU, `github-secret`) — runs `agent.py` with the Claude Agent SDK. Mounts two volumes: `/data` for models, datasets, and checkpoints; `/trackio` for metric `.db` files. Calls the Anthropic API through the proxy via `ANTHROPIC_BASE_URL`. Created via `modal.Sandbox.create()` from a host service (e.g. a Slack bot or CLI) that manages the multi-turn REPL over stdin/stdout with an `END_TURN` sentinel
 - **Proxy** (CPU, `anthropic-secret`) — receives requests from the sandbox, swaps the sandbox ID for the real API key, and streams responses back from `api.anthropic.com`
 - **Syncer** (CPU, `hf-secret`) — polls the shared `/trackio` volume for changed `.db` files and uploads them to an HF Space
 
@@ -46,7 +45,6 @@ ml_agent/
 3. Read `references/entrypoint.md` — set up the Claude Agent SDK entrypoint
 4. **Copy `references/CLAUDE.md` content into your project's `.claude/CLAUDE.md`** — this is the agent's system instructions. Customize it for your use case (environment, credentials, workflow).
 5. Copy agent skills from `references/transformers/` and `references/hugging-face-trackio/` into your `.claude/skills/`
-6. Wire the CLI — create the sandbox, spawn the syncer, manage the REPL lifecycle
 
 ## Key Patterns
 

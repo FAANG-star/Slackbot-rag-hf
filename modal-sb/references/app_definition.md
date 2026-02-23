@@ -1,8 +1,8 @@
 # Modal App — Shared Resources, Sandbox Image, and Volumes
 
-The infrastructure is split across `shared.py` (app, volumes, constants) and `sandbox.py` (image, creation). Everything else imports from `shared.py`.
+The infrastructure is split across `infra.py` (app, volumes, constants) and `sandbox.py` (image, creation). Everything else imports from `infra.py`.
 
-## Shared Resources (shared.py)
+## Shared Resources (infra.py)
 
 ```python
 """Shared Modal app and volumes."""
@@ -27,12 +27,12 @@ TRACKIO_MOUNT = "/root/.cache/huggingface/trackio"
 ```python
 from pathlib import Path
 import modal
-from .shared import app, data_vol, trackio_vol, TRACKIO_MOUNT
+from .infra import app, data_vol, trackio_vol, TRACKIO_MOUNT
 from .proxy import anthropic_proxy
 from .trackio_sync import trackio_syncer
 
-ENTRYPOINT = Path(__file__).parent.parent / "agent" / "agent.py"
-CLAUDE_DIR = Path(__file__).parent.parent / ".claude"
+ENTRYPOINT = Path(__file__).parent / "agent.py"
+CLAUDE_DIR = Path(__file__).parent / ".claude"
 
 sandbox_image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -110,15 +110,8 @@ Key details:
 ## How Components Import
 
 ```python
-# app.py (CLI)
-from ml_agent.infra import app, create_sandbox
-
-# infra/__init__.py
-from .shared import app
-from .sandbox import create_sandbox
-
 # proxy.py, trackio_sync.py, sandbox.py
-from .shared import app, data_vol, trackio_vol, TRACKIO_MOUNT
+from .infra import app, data_vol, trackio_vol, TRACKIO_MOUNT
 ```
 
 The `app` object is shared so all functions (proxy, syncer, sandbox) run in the same Modal app context.

@@ -6,10 +6,10 @@ This Slackbot allows you to deploy two secure and cost-efficient agentic workflo
 
 2. **ML agent** — a Claude agent that trains and runs HuggingFace models on a GPU sandbox, without ever being exposed to your API keys.
 
-Thanks to [Modal GPU snapshots](https://modal.com/docs/guide/memory-snapshot) there are no idle compute costs. Tagging the bot cold-starts within **~12 seconds** — on first deploy the model loads once (~2 min), then weights are checkpointed to CPU RAM. Every subsequent cold start restores from the snapshot and moves weights back to GPU in ~1 second.
+Thanks to [Modal GPU snapshots](https://modal.com/docs/guide/memory-snapshot) there are no idle compute costs. Tagging the bot cold-starts within **~4 minutes**, then weights are checkpointed to CPU RAM. Every subsequent cold start restores from the snapshot and moves weights back to GPU in ~1 second.
 
 - [Why This Exists](#why-this-exists)
-- [Features](#features)
+- [What's Inside](#whats-inside)
 - [Architecture](#architecture)
 - [Setup](#setup)
 - [Demo](#demo)
@@ -31,7 +31,7 @@ It demonstrates how proprietary LLMs can use fine-tuned models as tools, process
 
 ---
 
-## Features
+## What's Inside
 
 ### Slack Bot
 
@@ -41,7 +41,7 @@ Works in DMs (via the Slack [Assistant](https://api.slack.com/docs/apps/ai) prot
 
 A fully local RAG pipeline running [Qwen3-14B-AWQ](https://huggingface.co/Qwen/Qwen3-14B-AWQ) (4-bit AWQ) on an A10G GPU via [vLLM](https://github.com/vllm-project/vllm). No external API calls for inference. Documents are indexed with [ChromaDB](https://www.trychroma.com/) and queried through a [LlamaIndex](https://www.llamaindex.ai/) ReAct agent with three tools:
 
-- **`search_documents`** — semantic search over indexed documents using [BGE-large](https://huggingface.co/BAAI/bge-large-en-v1.5) embeddings
+- **`search_documents`** — semantic search over indexed documents using [BGE-base-en-v1.5](https://huggingface.co/BAAI/bge-base-en-v1.5) embeddings
 - **`execute_python`** — runs Python code for data analysis, chart generation, file processing (pandas, matplotlib, openpyxl pre-installed)
 - **`list_documents`** — lists uploaded files so the agent can confirm paths before accessing them
 
@@ -75,7 +75,7 @@ Everything deploys as a single Modal app.
 
 The **Slack bot** is a FastAPI + slack-bolt server that stays warm and routes messages. Plain text and file uploads go to the RAG agent. Messages prefixed with `hf:` go to the ML training agent.
 
-The **RAG agent** runs as a Modal class on an A10G GPU. vLLM serves [Qwen3-14B-AWQ](https://huggingface.co/Qwen/Qwen3-14B-AWQ) (4-bit AWQ, ~8GB VRAM), ChromaDB stores embeddings, and a LlamaIndex ReAct agent orchestrates search and code execution. Documents never leave this container. GPU memory snapshots reduce cold starts to ~12 seconds: on first deploy the model loads into VRAM (~2 min), warms up, then offloads weights to CPU RAM via vLLM's sleep mode before the snapshot is taken. Subsequent cold starts restore from the snapshot and move weights back to GPU in ~1 second.
+The **RAG agent** runs as a Modal class on an A10G GPU. vLLM serves [Qwen3-14B-AWQ](https://huggingface.co/Qwen/Qwen3-14B-AWQ) (4-bit AWQ, ~8GB VRAM), ChromaDB stores embeddings, and a LlamaIndex ReAct agent orchestrates search and code execution. Documents never leave this container. GPU memory snapshots reduce cold starts. On first deploy the model loads into VRAM (~4 min), warms up, then offloads weights to CPU RAM via vLLM's sleep mode before the snapshot is taken. Subsequent cold starts restore from the snapshot and move weights back to GPU in ~1 second.
 
 The **ML sandbox** runs on an A10 GPU. Each request launches a Claude Agent SDK session that can write code, install packages, and train models. It talks to the Anthropic API through a **proxy container** that intercepts requests and swaps the sandbox's fake key for the real one. The sandbox never sees your Anthropic API key.
 
@@ -142,7 +142,7 @@ Share files directly in Slack by uploading in a channel (drag and drop, then `@r
 
 ### RAG: Wikipedia
 
-**How it works:** Share a file in Slack → the bot downloads it to a Modal volume → the indexer parses it into text, splits it into chunks (1024 tokens each), and embeds each chunk with BGE-large on GPU → embeddings are stored in ChromaDB. When you ask a question, the ReAct agent retrieves the top-k most similar chunks, uses them as context, and generates an answer with the local LLM. Your files, embeddings, and queries never leave the GPU container.
+**How it works:** Share a file in Slack → the bot downloads it to a Modal volume → the indexer parses it into text, splits it into chunks (1024 tokens each), and embeds each chunk with [BGE-base-en-v1.5](https://huggingface.co/BAAI/bge-base-en-v1.5) on GPU → embeddings are stored in ChromaDB. When you ask a question, the ReAct agent retrieves the top-k most similar chunks, uses them as context, and generates an answer with the local LLM. Your files, embeddings, and queries never leave the GPU container.
 
 The [Simple English Wikipedia dump](https://dumps.wikimedia.org/simplewiki/latest/) is a clean benchmark. The included subset has ~48,000 articles (31 MB compressed, 54 MB uncompressed) — too much for any context window, but exactly the kind of broad knowledge base where semantic search shines.
 
@@ -168,7 +168,7 @@ Prefix messages with `hf:` to route to the ML training agent:
 
 The agent asks clarifying questions about model choice, dataset, and HuggingFace username before writing any code:
 
-![Agent suggesting models and datasets before training](assets/prompt.png)
+![Agent suggesting models and datasets before training](assets/hf-prompt.png)
 *Agent suggests models and datasets with tradeoffs, then waits for confirmation.*
 
 Training metrics sync to a HuggingFace Space dashboard:
