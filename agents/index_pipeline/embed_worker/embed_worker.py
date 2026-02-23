@@ -18,7 +18,7 @@ from .helpers.tei_server import TeiServer
     env={
         "HF_HOME": "/data/hf-cache",
         "HUGGINGFACE_HUB_CACHE": "/data/hf-cache",
-        "WORKER_VERSION": "18",
+        "WORKER_VERSION": "22",
     },
 )
 @modal.concurrent(max_inputs=config.WORKERS_PER_GPU)
@@ -36,10 +36,11 @@ class EmbedWorker:
         self._http = httpx.Client(timeout=120.0)
 
     @modal.method()
-    def embed(self, work: dict, worker_id: int, upsert_worker) -> tuple[int, int]:
+    def embed(self, work: dict, worker_id: int) -> tuple[int, int]:
         """Parse, chunk, embed, fire chunks to upsert worker. Returns (worker_id, chunk_count)."""
+        from agents.index_pipeline.embed_worker.upsert_worker import UpsertWorker
         total, chunks = self._parser.embed(work)
-        upsert_worker.receive.spawn(chunks, worker_id, work)
+        UpsertWorker().receive.spawn(chunks, worker_id, work)
         return worker_id, total
 
     def _chunk_and_embed(self, docs: list) -> tuple[int, list]:

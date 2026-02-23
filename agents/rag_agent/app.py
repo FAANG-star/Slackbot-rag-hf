@@ -11,7 +11,7 @@ from agents.rag_agent.infra import image
     gpu="A10G",
     volumes={"/data": rag_vol},
     scaledown_window=60 * 2,
-    min_containers=1,
+    min_containers=0,
     enable_memory_snapshot=True,
     experimental_options={"enable_gpu_snapshot": True},
     startup_timeout=600,
