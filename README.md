@@ -1,14 +1,14 @@
 ## TL;DR
 
-Agentic AI doesn't have risk your privacy. Open-source models and GPU infrastructure are making it easier to deploy custom agents that help you make sense of huge amounts of data without sacrificing privacy.
+This Slackbot allows you to deploy two secure and cost-efficient agentic workflows on private Modal infrastructure, without sharing data to third parties or exposing secrets to the agent.
 
-A Slack bot connected to two secure AI agents:
-
-1. **RAG agent** — automatically indexes files and zipped folders uploaded through Slack, then answers your questions using a local LLM. Your documents never leave the GPU. It also writes python scripts to analyze specific docs. 
+1. **RAG agent** — automatically indexes files and zipped folders uploaded through Slack, then answers your questions using a local LLM. Your documents never leave the GPU.
 
 2. **ML agent** — a Claude agent that trains and runs HuggingFace models on a GPU sandbox, without ever being exposed to your API keys.
 
-Plus, there are no idle compute costs. Tagging the bot cold-starts the RAG agent in **~10 seconds** thanks to Modal's GPU memory snapshots — on first deploy the model loads once (~2 min), then weights are checkpointed to CPU RAM. Every subsequent cold start restores them to GPU in under 1 second.
+Thanks to [Modal GPU snapshots](https://modal.com/docs/guide/memory-snapshot) there are no idle compute costs. Tagging the bot cold-starts within **~12 seconds** — on first deploy the model loads once (~2 min), then weights are checkpointed to CPU RAM. Every subsequent cold start restores from the snapshot and moves weights back to GPU in ~1 second.
+
+![Cold start times](assets/cold-starts.png)
 
 - [Why This Exists](#why-this-exists)
 - [Features](#features)
@@ -17,24 +17,19 @@ Plus, there are no idle compute costs. Tagging the bot cold-starts the RAG agent
 - [Demo](#demo)
   - [RAG: Wikipedia](#rag-wikipedia)
   - [ML Training](#ml-training)
-  - [Debugging](#debugging)
 - [Credits](#credits)
 
 ---
 
 ## Why This Exists
 
-It is possible to protect your data and incorporate agentic AI into workflows. Advances in open-source models and GPU infrastructure is making it easier to deploy custom agents that help you make sense of huge amount of data without sending it over to a third-party service. 
+Basically, proprietary models are powerful generalists but expensive. Open-weight models are more accurate within their training domain and cheaper to run. This repo experiments with mixing both types into the same workflows to get secure, cost-efficient results.
 
-This repo includes a slackbot connected to two secure AI agents. 
+The first workflow is an automated RAG pipeline that lets any user in a Slack workspace tag the bot to upload files and ask questions against those documents. It's completely private: document embedding, the vector database, and the LLM all run on Modal infrastructure. This also means you're not paying for idle compute. After 2 minutes of inactivity, the GPU shuts down, and spins back up quickly when tagged again, saving hundreds of dollars a month compared to renting a persistent GPU.
 
-1. RAG bot: automatically index files and zipped folders uploaded to it from slack, and them answer your questions accuretly. It also writes python scripts to analyze specific docs. 
+The second workflow uses GPU sandboxes to securely run a Claude agent with access to Hugging Face, letting you "vibe-tune" or "vibe-infer" any available model on any dataset and run your own experiments. The environment isn't attached to your file system, and your secrets are proxied into the sandbox, so the agent couldn't leak them if it tried.
 
-2. HuggingFace bot: secure claude agent that can train and/or run huggingface models and return results. Securely without being exposed to secrets.  
-
-You also don't need to spend money on idle compute. Tagging the bot cold-starts the RAG agent in ~10 seconds via GPU memory snapshots — on first deploy the model loads once (~2 min), then every subsequent cold start restores weights to GPU in under 1 second.
-
-**How it works:** Share a file in Slack → the bot downloads it to a Modal volume → the indexer parses it into text, splits it into chunks (512 tokens each), and embeds each chunk with BGE-large on GPU → embeddings are stored in ChromaDB. When you ask a question, the ReAct agent retrieves the top-k most similar chunks, uses them as context, and generates an answer with the local LLM. Your files, embeddings, and queries never leave the GPU container.
+It demonstrates how proprietary LLMs can use fine-tuned models as tools, processing data more accurately and cost-efficiently than they could otherwise. The example below shows a media processing task that would be out of reach for an LLM alone, since some data types fall outside what they're trained to handle.
 
 ---
 
@@ -78,11 +73,11 @@ Training metrics sync to a [Trackio](https://huggingface.co/blog/trackio) dashbo
 
 ## Architecture
 
-Everything deploys as a single Modal app. One `modal deploy` command and you're done.
+Everything deploys as a single Modal app.
 
 The **Slack bot** is a FastAPI + slack-bolt server that stays warm and routes messages. Plain text and file uploads go to the RAG agent. Messages prefixed with `hf:` go to the ML training agent.
 
-The **RAG agent** runs as a Modal class on an A10G GPU. vLLM serves [Qwen3-14B-AWQ](https://huggingface.co/Qwen/Qwen3-14B-AWQ) (4-bit AWQ, ~8GB VRAM), ChromaDB stores embeddings, and a LlamaIndex ReAct agent orchestrates search and code execution. Documents never leave this container. GPU memory snapshots reduce cold starts to ~10 seconds: on first deploy the model loads into VRAM (~2 min), warms up, then offloads weights to CPU RAM before the snapshot is taken. Subsequent cold starts restore from the snapshot and move weights back to GPU in under 1 second.
+The **RAG agent** runs as a Modal class on an A10G GPU. vLLM serves [Qwen3-14B-AWQ](https://huggingface.co/Qwen/Qwen3-14B-AWQ) (4-bit AWQ, ~8GB VRAM), ChromaDB stores embeddings, and a LlamaIndex ReAct agent orchestrates search and code execution. Documents never leave this container. GPU memory snapshots reduce cold starts to ~12 seconds: on first deploy the model loads into VRAM (~2 min), warms up, then offloads weights to CPU RAM via vLLM's sleep mode before the snapshot is taken. Subsequent cold starts restore from the snapshot and move weights back to GPU in ~1 second.
 
 The **ML sandbox** runs on an A10 GPU. Each request launches a Claude Agent SDK session that can write code, install packages, and train models. It talks to the Anthropic API through a **proxy container** that intercepts requests and swaps the sandbox's fake key for the real one. The sandbox never sees your Anthropic API key.
 
@@ -141,11 +136,7 @@ This deploys the Slack bot, API proxy, and pre-builds both GPU sandbox images. M
 
 ### 5. Upload documents (optional)
 
-Share files directly in Slack by uploading in a channel (drag and drop, then `@rag_bot` to index them) or in a DM, or bulk upload via script:
-
-```bash
-modal run scripts/upload_test_data.py
-```
+Share files directly in Slack by uploading in a channel (drag and drop, then `@rag_bot` to index them) or in a DM.
 
 ---
 
@@ -153,27 +144,24 @@ modal run scripts/upload_test_data.py
 
 ### RAG: Wikipedia
 
-The [Simple English Wikipedia dump](https://dumps.wikimedia.org/simplewiki/latest/) is a clean benchmark: ~250,000 articles covering every topic, totaling around 1 GB compressed (~4 GB extracted). Too much for any context window, but exactly the kind of broad knowledge base where semantic search shines.
+**How it works:** Share a file in Slack → the bot downloads it to a Modal volume → the indexer parses it into text, splits it into chunks (1024 tokens each), and embeds each chunk with BGE-large on GPU → embeddings are stored in ChromaDB. When you ask a question, the ReAct agent retrieves the top-k most similar chunks, uses them as context, and generates an answer with the local LLM. Your files, embeddings, and queries never leave the GPU container.
+
+The [Simple English Wikipedia dump](https://dumps.wikimedia.org/simplewiki/latest/) is a clean benchmark. The included subset has ~48,000 articles (31 MB compressed, 54 MB uncompressed) — too much for any context window, but exactly the kind of broad knowledge base where semantic search shines.
 
 Upload the zip to the bot in Slack — it extracts and indexes the articles automatically.
 
 **How indexing works:** The pipeline runs in three phases:
 
 1. **Scan** — compares each file's mtime and size against a manifest to find only new or changed files. Already-indexed content is skipped.
-2. **Embed** — files are distributed across 8 parallel workers on A10G GPUs, with up to 4 workers sharing each GPU concurrently (`@modal.concurrent(max_inputs=4)`). Each worker runs a [TEI](https://github.com/huggingface/text-embeddings-inference) embedding server as a sidecar subprocess, parses files, splits text into 512-token chunks with 64-token overlap using a sentence-aware splitter, embeds each chunk with [BGE-base-en-v1.5](https://huggingface.co/BAAI/bge-base-en-v1.5), and upserts to its own ChromaDB shard.
+2. **Embed** — files are distributed across 8 parallel workers on A10G GPUs, with up to 4 workers sharing each GPU concurrently (`@modal.concurrent(max_inputs=4)`). Each worker runs a [TEI](https://github.com/huggingface/text-embeddings-inference) embedding server as a sidecar subprocess, parses files, splits text into 1024-token chunks with 128-token overlap using a sentence-aware splitter, embeds each chunk with [BGE-base-en-v1.5](https://huggingface.co/BAAI/bge-base-en-v1.5), and upserts to its own ChromaDB shard.
 3. **Finalize** — worker manifests are merged into a single `manifest.json`, and ChromaDB shards are consolidated. The RAG agent reloads the index.
 
-The full zip is 157 MB (551 MB uncompressed) containing ~242,000 articles. Indexing took **30 minutes** across 8 parallel A10G workers.
+The subset zip is 31 MB (54 MB uncompressed) containing ~48,000 articles.
 
 ![Indexing progress message in Slack](assets/rag_index.png)
 *The bot reports indexing progress as it processes each batch of articles.*
 
 Then ask questions:
-
-> **You:** What were the main causes and consequences of the 2008 financial crisis?
-
-![RAG answer about the 2008 financial crisis](assets/rag_query.png)
-*The agent searches across thousands of articles, pulls relevant sections from multiple pages, and synthesizes a coherent answer — all on your GPU, nothing sent externally.*
 
 > **You:** Plot a timeline of major space exploration milestones from 1957 to 2024.
 
@@ -195,17 +183,6 @@ Training metrics sync to a HuggingFace Space dashboard:
 
 ![Trackio dashboard showing training metrics for swin-eurosat-multispectral](assets/trackio.png)
 *Metrics sync every ~30 seconds via Trackio.*
-
-### Debugging
-
-Interactive REPL for testing the RAG agent directly:
-
-```bash
-modal run scripts/debug_rag.py                  # interactive mode
-modal run scripts/debug_rag.py --test rag       # test document Q&A
-modal run scripts/debug_rag.py --test ml        # test code execution
-modal run scripts/debug_rag.py --test csv       # test CSV analysis
-```
 
 ---
 

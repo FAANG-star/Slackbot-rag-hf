@@ -18,7 +18,7 @@ from .helpers.tei_server import TeiServer
     env={
         "HF_HOME": "/data/hf-cache",
         "HUGGINGFACE_HUB_CACHE": "/data/hf-cache",
-        "WORKER_VERSION": "22",
+        "WORKER_VERSION": "23",
     },
 )
 @modal.concurrent(max_inputs=config.WORKERS_PER_GPU)

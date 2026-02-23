@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-UPSERT_BATCH = 20_000
+UPSERT_BATCH = 5_000
 
 
 class ChunkStore:

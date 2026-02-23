@@ -25,8 +25,8 @@ OLLAMA_PORT = 11434
 EMBEDDING_MODEL = "BAAI/bge-base-en-v1.5"  # 110M params, 768-dim
 
 # --- Chunking ---
-CHUNK_SIZE = 512
-CHUNK_OVERLAP = 64
+CHUNK_SIZE = 1024
+CHUNK_OVERLAP = 128
 
 # --- Embedding ---
 EMBED_BATCH_SIZE = 256  # texts per GPU forward pass
