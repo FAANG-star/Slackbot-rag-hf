@@ -1,6 +1,6 @@
 """Slack bot — Modal app, volumes, and Bot entrypoint.
 
-Deploy: modal deploy slackbot/app.py
+Deploy: modal deploy -m slackbot.app
 """
 
 import os
@@ -8,13 +8,7 @@ import threading
 
 import modal
 
-app = modal.App("ml-agent")
-
-data_vol = modal.Volume.from_name("sandbox-data", create_if_missing=True)
-rag_vol = modal.Volume.from_name("sandbox-rag", create_if_missing=True)
-trackio_vol = modal.Volume.from_name("sandbox-trackio", create_if_missing=True)
-
-TRACKIO_MOUNT = "/root/.cache/huggingface/trackio"
+from slackbot.modal_app import app, data_vol, rag_vol, trackio_vol, TRACKIO_MOUNT
 
 slack_secret = modal.Secret.from_name("slack-secret")
 
@@ -58,14 +52,7 @@ class Bot:
             token=os.environ["SLACK_BOT_TOKEN"],
             signing_secret=os.environ["SLACK_SIGNING_SECRET"],
         )
-
-        @slack_app.event("app_mention")
-        def handle_mention(body, client, **_):
-            threading.Thread(
-                target=self.router.handle,
-                args=(body["event"], client),
-                daemon=True,
-            ).start()
+        _register_slack_handlers(slack_app, self.router)
 
         # Slack retries events if no 200 within 3s — drop retries to avoid duplicate handling
         handler = SlackRequestHandler(slack_app)
@@ -85,3 +72,24 @@ class Bot:
     @modal.asgi_app()
     def serve(self):
         return self._app
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+
+
+def _register_slack_handlers(slack_app, router):
+    """Register Slack event handlers on the bolt app."""
+
+    # Dispatch in a thread so Slack gets 200 within its 3s timeout
+    @slack_app.event("app_mention")
+    def handle_mention(body, client, **_):
+        threading.Thread(
+            target=router.handle,
+            args=(body["event"], client),
+            daemon=True,
+        ).start()
+
+    # Slack sends message events for every channel msg — ignore to avoid 404 noise
+    @slack_app.event("message")
+    def handle_message(**_):
+        pass

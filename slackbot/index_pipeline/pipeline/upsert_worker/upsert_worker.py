@@ -2,7 +2,7 @@
 
 from pathlib import Path
 import modal
-from slackbot.app import app, rag_vol
+from slackbot.modal_app import app, rag_vol
 
 CHROMA_DIR = "/data/rag/chroma"
 CHROMA_COLLECTION = "rag_documents"
@@ -10,12 +10,12 @@ UPSERT_BATCH = 5_000
 
 upsert_image = modal.Image.debian_slim(python_version="3.12").pip_install("chromadb")
 
-@modal.concurrent(64)
 @app.cls(
     image=upsert_image,
     volumes={"/data": rag_vol},
     timeout=60 * 60,
 )
+@modal.concurrent(max_inputs=1)
 class UpsertWorker:
 
     @modal.enter()
@@ -53,11 +53,14 @@ class UpsertWorker:
         Used by Scanner to compare disk fingerprints against what's
         already in ChromaDB, skipping files that haven't changed.
         """
-        result = self._collection.get(include=["metadatas"])
         indexed: dict[str, str] = {}
-        for meta in result["metadatas"] or []:
-            source = meta.get("source")
-            fingerprint = meta.get("fingerprint")
-            if source and fingerprint:
-                indexed[source] = fingerprint
+        total = self._collection.count()
+        page_size = 5_000
+        for offset in range(0, total, page_size):
+            result = self._collection.get(include=["metadatas"], limit=page_size, offset=offset)
+            for meta in result["metadatas"] or []:
+                source = meta.get("source")
+                fingerprint = meta.get("fingerprint")
+                if source and fingerprint:
+                    indexed[source] = fingerprint
         return indexed

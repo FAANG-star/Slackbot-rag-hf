@@ -17,9 +17,12 @@ if TYPE_CHECKING:
 
 def create_workflow(search_index: SearchIndex, llm: LLM) -> AgentWorkflow:
     """Create a ReAct agent with search, code execution, and file listing tools."""
+    def _search(query: str) -> str:
+        return search_documents(query, search_index)
+
     tools = [
         FunctionTool.from_defaults(
-            fn=lambda query: search_documents(query, search_index),
+            fn=_search,
             name="search_documents",
             description="Search indexed documents for relevant information.",
         ),

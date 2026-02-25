@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Callable
 
-from slackbot.app import rag_vol
+from slackbot.modal_app import rag_vol
 
 
 class Scanner:

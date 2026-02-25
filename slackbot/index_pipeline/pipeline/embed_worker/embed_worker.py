@@ -2,7 +2,7 @@
 
 import modal
 
-from slackbot.app import app, rag_vol
+from slackbot.modal_app import app, rag_vol
 
 from .helpers.file_parser import FileParser
 from .tei_server import BATCH_SIZE, PORT, TeiServer
@@ -40,7 +40,7 @@ hf_secret = modal.Secret.from_name("hf-secret")
     env={
         "HF_HOME": "/data/hf-cache",
         "HUGGINGFACE_HUB_CACHE": "/data/hf-cache",
-        "WORKER_VERSION": "23",
+        "WORKER_VERSION": "24",
     },
 )
 @modal.concurrent(max_inputs=WORKERS_PER_GPU)

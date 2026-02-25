@@ -6,7 +6,7 @@ subsequent cold starts restore from GPU snapshot (~1s).
 
 import modal
 
-from slackbot.app import app, rag_vol
+from slackbot.modal_app import app, rag_vol
 
 # -- GPU image: CUDA + vLLM + LlamaIndex + doc parsing libs --
 
@@ -29,7 +29,7 @@ image = (
         "matplotlib",
     )
     .env({
-        "IMAGE_VERSION": "93",
+        "IMAGE_VERSION": "95",
         "TORCHINDUCTOR_COMPILE_THREADS": "1",
         # Dev mode enables /sleep and /wake_up endpoints for GPU snapshots
         "VLLM_SERVER_DEV_MODE": "1",
@@ -68,7 +68,8 @@ class RagService:
 
     @modal.enter(snap=False)
     def wake_up(self):
-        """After snapshot restore: move weights back to GPU (~1s)."""
+        """After snapshot restore: reconnect ChromaDB (stale from snapshot), wake GPU."""
+        self._search_index.reload()
         self._llm.wake_up()
 
     @modal.exit()
@@ -85,7 +86,8 @@ class RagService:
     @modal.method()
     def query(self, message: str) -> tuple[str, list[str]]:
         """Run a RAG query. Returns (response_text, output_file_paths)."""
+        import asyncio
         from slackbot.rag.agent import parse_response, run_query
 
-        response = run_query(message, llm=self._llm, search_index=self._search_index)
+        response = asyncio.run(run_query(message, llm=self._llm, search_index=self._search_index))
         return parse_response(response)

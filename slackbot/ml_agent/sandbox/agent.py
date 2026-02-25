@@ -1,15 +1,14 @@
 """Claude Agent SDK wrapper — runs inside the Modal sandbox.
 
 Long-lived stdin loop: reads JSON messages, runs the Claude SDK, prints
-responses, then a sentinel. Session IDs are held in memory so the SDK
-can resume conversations across messages in the same thread.
+responses, then a sentinel. One persistent ClaudeSDKClient stays alive
+across all turns — avoids the subprocess teardown/recreate that crashes.
 """
 
 import asyncio
 import json
 import os
 import sys
-
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
@@ -18,19 +17,22 @@ from claude_agent_sdk import (
     TextBlock,
 )
 
+END_SENTINEL = "__END__"
+
+
 class Agent:
-    """Wraps the Claude Agent SDK with in-memory session tracking."""
+    """Wraps a single persistent ClaudeSDKClient for multi-turn conversations."""
 
     def __init__(self):
-        # The proxy expects any non-empty key; sandbox ID is a convenient unique value
         os.environ["ANTHROPIC_API_KEY"] = os.environ.get("MODAL_SANDBOX_ID", "")
-        self._sessions: dict[str, str] = {}
+        self._client = None
 
-    async def run(self, message: str, session: str):
-        """Send a message and print streamed responses."""
+    async def _ensure_client(self):
+        """Create the client once; reuse across all turns."""
+        if self._client is not None:
+            return
         options = ClaudeAgentOptions(
             model="claude-sonnet-4-6",
-            resume=self._sessions.get(session),
             system_prompt={
                 "type": "preset",
                 "preset": "claude_code",
@@ -42,29 +44,36 @@ class Agent:
             permission_mode="acceptEdits",
             max_turns=100,
         )
+        self._client = ClaudeSDKClient(options=options)
+        await self._client.__aenter__()
 
-        async with ClaudeSDKClient(options=options) as client:
-            await client.query(message)
-            async for msg in client.receive_response():
-                self._handle(msg, session)
-
-    def _handle(self, msg, session: str):
-        """Print text responses and persist session ID."""
-        if isinstance(msg, AssistantMessage):
-            for block in msg.content:
-                if isinstance(block, TextBlock):
-                    print(block.text, flush=True)
-        elif isinstance(msg, ResultMessage):
-            if msg.is_error:
-                print(f"Error: {msg.result}", flush=True)
-            self._sessions[session] = msg.session_id
+    async def run(self, message: str):
+        """Send a message on the persistent client and print responses."""
+        await self._ensure_client()
+        await self._client.query(message)
+        # Stream response blocks to stdout — ml_handler reads these lines
+        async for msg in self._client.receive_response():
+            if isinstance(msg, AssistantMessage):
+                for block in msg.content:
+                    if isinstance(block, TextBlock):
+                        print(block.text, flush=True)
+            elif isinstance(msg, ResultMessage):
+                if msg.is_error:
+                    print(f"Error: {msg.result}", flush=True)
 
 
-agent = Agent()
-END_SENTINEL = "__END__"
+async def main():
+    agent = Agent()
+    # Stdin loop: each line is a JSON request from ml_handler
+    for line in sys.stdin:
+        request = json.loads(line.strip())
+        try:
+            await agent.run(request["message"])
+        except Exception as e:
+            print(f"Error: {e}", flush=True)
+            agent._client = None  # reset so next turn creates a fresh client
+        # Sentinel tells ml_handler this turn is done
+        print(END_SENTINEL, flush=True)
 
-# Stdin loop: slackbot writes JSON requests, we print responses + sentinel
-for line in sys.stdin:
-    request = json.loads(line.strip())
-    asyncio.run(agent.run(request["message"], request["session"]))
-    print(END_SENTINEL, flush=True)
+
+asyncio.run(main())

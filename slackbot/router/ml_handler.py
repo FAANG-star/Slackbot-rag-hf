@@ -30,10 +30,13 @@ class MlHandler:
                     break
                 lines.append(line)
 
-        say("\n".join(lines).strip())
+        response = "\n".join(lines).strip()
+        say(response or "(No response from agent)")
 
     def _ensure_sandbox(self):
-        """Get or create the sandbox (agent starts as the entrypoint)."""
+        """Get or create the sandbox, replacing it if the previous one died."""
+        if self._sandbox is not None and self._sandbox.poll() is not None:
+            self._sandbox = None
         if self._sandbox is None:
             self._sandbox = self._get_sb()
             self._stdout = iter(self._sandbox.stdout)

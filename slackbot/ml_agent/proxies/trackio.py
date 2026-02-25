@@ -5,7 +5,7 @@ from pathlib import Path
 
 import modal
 
-from slackbot.app import app, trackio_vol, TRACKIO_MOUNT
+from slackbot.modal_app import app, trackio_vol, TRACKIO_MOUNT
 
 syncer_image = modal.Image.debian_slim(python_version="3.12").pip_install("trackio")
 syncer_secret = modal.Secret.from_name("hf-secret")

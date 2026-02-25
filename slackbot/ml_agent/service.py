@@ -8,11 +8,11 @@ from pathlib import Path
 
 import modal
 
-from slackbot.app import app, data_vol, trackio_vol, TRACKIO_MOUNT
+from slackbot.modal_app import app, data_vol, trackio_vol, TRACKIO_MOUNT
 from .proxies import anthropic_proxy, trackio_syncer
 
 SANDBOX_DIR = Path(__file__).parent / "sandbox"
-CLAUDE_DIR = Path(__file__).parent / ".claude"
+CLAUDE_DIR = Path(__file__).parent / "_claude"
 SANDBOX_NAME = "ml-agent"
 
 # -- Sandbox image: Claude Agent SDK + trackio on A10 GPU --
@@ -21,6 +21,7 @@ sandbox_image = (
     modal.Image.debian_slim(python_version="3.12")
     .apt_install("git", "curl")
     .pip_install("claude-agent-sdk", "trackio")
+    .env({"IMAGE_VERSION": "1"})
     .add_local_dir(SANDBOX_DIR, "/agent")
     .add_local_dir(CLAUDE_DIR, "/app/.claude")
 )

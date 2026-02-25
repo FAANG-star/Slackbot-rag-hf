@@ -7,7 +7,6 @@ RAG_ROOT = Path("/data/rag")
 DOCS_DIR = RAG_ROOT / "docs"
 CHROMA_DIR = RAG_ROOT / "chroma"
 OUTPUT_DIR = RAG_ROOT / "output"
-MANIFEST_PATH = CHROMA_DIR / "manifest.json"
 
 # --- LLM (vLLM subprocess) ---
 VLLM_MODEL = "Qwen/Qwen3-14B-AWQ"  # AWQ 4-bit, ~8GB on A10G

@@ -6,7 +6,7 @@ This Slackbot allows you to deploy two secure and cost-efficient agentic workflo
 
 2. **ML agent** — a Claude agent that trains and runs HuggingFace models on a GPU sandbox, without ever being exposed to your API keys.
 
-Thanks to [Modal GPU snapshots](https://modal.com/docs/guide/memory-snapshot) there are no idle compute costs. Tagging the bot cold-starts within **~4 minutes**, then weights are checkpointed to CPU RAM. Every subsequent cold start restores from the snapshot and moves weights back to GPU in ~1 second.
+Thanks to [Modal GPU snapshots](https://modal.com/docs/guide/memory-snapshot) there are no idle compute costs. The first deploy cold-starts vLLM and takes **~5 minutes** to create the initial snapshot. Every subsequent cold start restores from the snapshot and moves weights back to GPU in **~1 second** — but GPU provisioning adds **~2 minutes** of scheduling overhead, so end-to-end cold start latency is **~3 minutes**. Warm queries (container still alive) respond in **~6 seconds**.
 
 - [Why This Exists](#why-this-exists)
 - [What's Inside](#whats-inside)
@@ -69,7 +69,7 @@ Everything deploys as a single Modal app from `slackbot/app.py`.
 
 The **Slack bot** is a FastAPI + slack-bolt server that stays warm (`min_containers=1`) with a CPU memory snapshot for fast restarts. It routes messages through a `Router` that dispatches to handler classes: file uploads go to indexing, `hf:` prefixed messages go to the ML agent, and everything else goes to the RAG agent.
 
-The **RAG agent** runs as a Modal class on an A10G GPU. vLLM serves [Qwen3-14B-AWQ](https://huggingface.co/Qwen/Qwen3-14B-AWQ) (4-bit AWQ, ~8GB VRAM), ChromaDB stores embeddings, and a LlamaIndex ReAct agent orchestrates search and code execution. Documents never leave this container. GPU memory snapshots reduce cold starts. On first deploy the model loads into VRAM (~4 min), warms up, then offloads weights to CPU RAM via vLLM's sleep mode before the snapshot is taken. Subsequent cold starts restore from the snapshot and move weights back to GPU in ~1 second.
+The **RAG agent** runs as a Modal class on an A10G GPU. vLLM serves [Qwen3-14B-AWQ](https://huggingface.co/Qwen/Qwen3-14B-AWQ) (4-bit AWQ, ~8GB VRAM), ChromaDB stores embeddings, and a LlamaIndex ReAct agent orchestrates search and code execution. Documents never leave this container. GPU memory snapshots reduce cold starts. On first deploy the model loads into VRAM (~5 min), warms up with 3 inferences, then offloads weights to CPU RAM via vLLM's sleep mode before the snapshot is taken. Subsequent cold starts restore from the snapshot (~52s) and move weights back to GPU (~1s). Modal GPU provisioning adds ~2 minutes of scheduling overhead, so end-to-end cold start latency is ~3 minutes. Warm queries respond in ~6 seconds.
 
 The **ML sandbox** runs on an A10 GPU. Each request launches a Claude Agent SDK session that can write code, install packages, and train models. It talks to the Anthropic API through a **proxy container** that intercepts requests and swaps the sandbox's fake key for the real one. The sandbox never sees your Anthropic API key.
 
@@ -121,7 +121,7 @@ modal secret create github-secret GITHUB_TOKEN=ghp_...
 ### 4. Deploy
 
 ```bash
-modal deploy slackbot/app.py
+modal deploy -m slackbot.app
 ```
 
 This deploys the Slack bot, API proxy, and pre-builds both GPU sandbox images. Modal will print the app URL — set this as the **Request URL** in your Slack app's **Event Subscriptions** settings (the bot listens on `/`).
