@@ -1,0 +1,44 @@
+"""Read-only vector index for query-time search."""
+
+import json
+
+import chromadb
+from llama_index.core import StorageContext, VectorStoreIndex
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.vector_stores.chroma import ChromaVectorStore
+
+from ..config import CHROMA_COLLECTION, CHROMA_DIR, EMBEDDING_MODEL, MANIFEST_PATH
+
+
+class SearchIndex:
+    """Holds the embedding model and VectorStoreIndex for query-time search.
+
+    The index_pipeline handles writing to ChromaDB — this class only reads.
+    """
+
+    def __init__(self):
+        self.embed_model = HuggingFaceEmbedding(
+            model_name=EMBEDDING_MODEL,
+            device="cuda",
+            normalize=True,
+            embed_batch_size=256,
+        )
+        CHROMA_DIR.mkdir(parents=True, exist_ok=True)
+        client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+        collection = client.get_or_create_collection(CHROMA_COLLECTION)
+        vector_store = ChromaVectorStore(chroma_collection=collection)
+        storage_context = StorageContext.from_defaults(vector_store=vector_store)
+        self.index = VectorStoreIndex.from_vector_store(
+            vector_store,
+            embed_model=self.embed_model,
+            storage_context=storage_context,
+        )
+
+    def has_index(self) -> bool:
+        """Check if any documents have been indexed (manifest exists)."""
+        if not MANIFEST_PATH.exists():
+            return False
+        try:
+            return bool(json.loads(MANIFEST_PATH.read_text()))
+        except (json.JSONDecodeError, ValueError):
+            return False

@@ -35,7 +35,7 @@ It demonstrates how proprietary LLMs can use fine-tuned models as tools, process
 
 ### Slack Bot
 
-Works in DMs (via the Slack [Assistant](https://api.slack.com/docs/apps/ai) protocol) and in channels (via `@mentions`). Upload files, ask questions, train models — all from Slack.
+Tag `@rag_bot` in any channel to interact. Upload files to index them, ask questions against your documents, or kick off ML training jobs — all from Slack.
 
 ### RAG Agent — Local LLM on GPU
 
@@ -59,21 +59,15 @@ Training metrics sync to a [Trackio](https://huggingface.co/blog/trackio) dashbo
 |---------|-------------|
 | Any text | RAG agent answers using indexed documents |
 | `hf: <prompt>` | Routes to the ML training agent |
-| `sources` | Lists all uploaded files with sizes |
-| `reindex` | Incremental re-index of documents |
-| `reindex --force` | Full rebuild of the document index |
-| `status` | Index stats (source count, chunk count) |
-| `clear` | Wipes index, output files, and conversation history |
-| `remove <filename>` | Deletes a file from the volume |
 | Share/upload files | Downloads to volume, auto-triggers reindex |
 
 ---
 
 ## Architecture
 
-Everything deploys as a single Modal app.
+Everything deploys as a single Modal app from `slackbot/app.py`.
 
-The **Slack bot** is a FastAPI + slack-bolt server that stays warm and routes messages. Plain text and file uploads go to the RAG agent. Messages prefixed with `hf:` go to the ML training agent.
+The **Slack bot** is a FastAPI + slack-bolt server that stays warm (`min_containers=1`) with a CPU memory snapshot for fast restarts. It routes messages through a `Router` that dispatches to handler classes: file uploads go to indexing, `hf:` prefixed messages go to the ML agent, and everything else goes to the RAG agent.
 
 The **RAG agent** runs as a Modal class on an A10G GPU. vLLM serves [Qwen3-14B-AWQ](https://huggingface.co/Qwen/Qwen3-14B-AWQ) (4-bit AWQ, ~8GB VRAM), ChromaDB stores embeddings, and a LlamaIndex ReAct agent orchestrates search and code execution. Documents never leave this container. GPU memory snapshots reduce cold starts. On first deploy the model loads into VRAM (~4 min), warms up, then offloads weights to CPU RAM via vLLM's sleep mode before the snapshot is taken. Subsequent cold starts restore from the snapshot and move weights back to GPU in ~1 second.
 
@@ -127,14 +121,14 @@ modal secret create github-secret GITHUB_TOKEN=ghp_...
 ### 4. Deploy
 
 ```bash
-modal deploy agents/slackbot/app.py
+modal deploy slackbot/app.py
 ```
 
 This deploys the Slack bot, API proxy, and pre-builds both GPU sandbox images. Modal will print the app URL — set this as the **Request URL** in your Slack app's **Event Subscriptions** settings (the bot listens on `/`).
 
 ### 5. Upload documents (optional)
 
-Share files directly in Slack by uploading in a channel (drag and drop, then `@rag_bot` to index them) or in a DM.
+Share files directly in Slack by uploading in a channel and tagging `@rag_bot` to index them.
 
 ---
 
