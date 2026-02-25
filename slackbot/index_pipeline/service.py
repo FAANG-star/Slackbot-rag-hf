@@ -2,11 +2,13 @@
 
 from pathlib import Path
 
-from .config import N_WORKERS, WORKERS_PER_GPU
-from .pipeline.embed_worker import EmbedWorker
+from .pipeline.embed_worker import EmbedWorker, WORKERS_PER_GPU
 from .pipeline.upsert_worker import UpsertWorker
 from .pipeline.preprocess.batch_builder import BatchBuilder
 from .pipeline.preprocess.scanner import Scanner
+
+# Number of GPU containers to fan out across
+N_WORKERS = 8
 
 
 class IndexService:
