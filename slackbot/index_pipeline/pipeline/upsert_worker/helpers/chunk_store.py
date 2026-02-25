@@ -11,9 +11,8 @@ class ChunkStore:
         import chromadb
 
         Path(chroma_dir).mkdir(parents=True, exist_ok=True)
-        self._client = chromadb.PersistentClient(path=chroma_dir)
-        self._collection_name = collection_name
-        self._collection = self._client.get_or_create_collection(collection_name)
+        client = chromadb.PersistentClient(path=chroma_dir)
+        self._collection = client.get_or_create_collection(collection_name)
 
     def upsert(self, chunks: list, worker_id: int) -> None:
         if not chunks:
@@ -29,12 +28,13 @@ class ChunkStore:
                 metadatas=list(metadatas),
             )
 
-    def reset(self) -> None:
-        try:
-            self._client.delete_collection(self._collection_name)
-        except Exception:
-            pass
-        self._collection = self._client.get_or_create_collection(self._collection_name)
-
-    def count(self) -> int:
-        return self._collection.count()
+    def get_indexed_files(self) -> dict[str, str]:
+        """Return {source: fingerprint} for all indexed files."""
+        result = self._collection.get(include=["metadatas"])
+        indexed: dict[str, str] = {}
+        for meta in result["metadatas"] or []:
+            source = meta.get("source")
+            fingerprint = meta.get("fingerprint")
+            if source and fingerprint:
+                indexed[source] = fingerprint
+        return indexed

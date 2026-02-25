@@ -4,10 +4,15 @@ import socket
 import subprocess
 import time
 
+MODEL = "BAAI/bge-base-en-v1.5"
+PORT = 8000
+MAX_BATCH = 512
+BATCH_SIZE = 256
+
 
 class TeiServer:
 
-    def __init__(self, model: str, port: int, max_batch: int):
+    def __init__(self, model: str = MODEL, port: int = PORT, max_batch: int = MAX_BATCH):
         self._model = model
         self._port = port
         self._max_batch = max_batch

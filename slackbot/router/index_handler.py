@@ -1,4 +1,4 @@
-"""Handle file uploads — download to volume and trigger reindex."""
+"""Handle file uploads — download to volume and trigger indexing."""
 
 import os
 import urllib.request
@@ -8,20 +8,20 @@ _DOCS_DIR = Path("/data/rag/docs")
 
 
 class IndexHandler:
-    """Download Slack-uploaded files to the rag volume and trigger reindexing."""
+    """Download Slack-uploaded files to the rag volume and trigger indexing."""
 
     def __init__(self, indexer, vol):
         self._indexer = indexer
         self._vol = vol
 
-    def handle(self, files: list[dict], channel: str, thread_ts: str, say) -> None:
+    def handle(self, files: list[dict], say) -> None:
         saved = self._download(files)
         self._vol.commit()
         if not saved:
             say("No downloadable files found in the shared items.")
             return
         say(f"Saved {len(saved)} file(s): {', '.join(saved)}")
-        self._reindex(channel, thread_ts, say)
+        self._index(say)
 
     def _download(self, files: list[dict]) -> list[str]:
         _DOCS_DIR.mkdir(parents=True, exist_ok=True)
@@ -38,8 +38,6 @@ class IndexHandler:
             saved.append(filename)
         return saved
 
-    def _reindex(self, channel: str, thread_ts: str, say) -> None:
-        result = self._indexer.reindex(
-            force=False, slack={"channel": channel, "thread_ts": thread_ts},
-        )
-        say(result or "Indexing started — I'll post updates here as it progresses.")
+    def _index(self, say) -> None:
+        result = self._indexer.index()
+        say(result)

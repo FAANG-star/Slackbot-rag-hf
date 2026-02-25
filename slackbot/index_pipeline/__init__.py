@@ -1,5 +1,5 @@
-"""Parallel indexing workers — GPU embedding + CPU finalize."""
+"""Parallel indexing pipeline — GPU embedding + CPU upsert."""
 
-from .index_pipeline import IndexPipeline
+from .service import IndexService
 
-__all__ = ["IndexPipeline"]
+__all__ = ["IndexService"]

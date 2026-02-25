@@ -9,29 +9,32 @@ class BatchBuilder:
     def __init__(self, n_batches: int):
         self._n = n_batches
 
-    def build(self, files: list[str]) -> tuple[list[dict], int]:
+    def build(self, files: list[str]) -> list[tuple[dict, int]]:
+        """Return (work_dict, worker_id) tuples ready for embed.starmap()."""
         batches: list[dict] = []
-        doc_count = 0
+        batches.extend(self._split_files(files))
+        batches.extend(self._split_zips(files))
+        return [(batch, i) for i, batch in enumerate(batches)]
 
-        # split regular files evenly across workers
+    def _split_files(self, files: list[str]) -> list[dict]:
+        """Distribute regular files evenly across workers."""
         regular = [f for f in files if not f.endswith(".zip")]
-        doc_count += len(regular)
-        for chunk in self._chunk(regular):
-            batches.append({"type": "files", "paths": chunk})
+        return [{"type": "files", "paths": chunk} for chunk in self._chunk(regular)]
 
-        # expand each zip's entries and distribute across workers
+    def _split_zips(self, files: list[str]) -> list[dict]:
+        """Expand each zip and distribute its entries across workers."""
+        batches = []
         for path in files:
             if not path.endswith(".zip"):
                 continue
             with zipfile.ZipFile(path) as zf:
                 entries = [n for n in zf.namelist() if not n.endswith("/")]
-            doc_count += len(entries)
             for chunk in self._chunk(entries):
                 batches.append({"type": "zip_entries", "zip_path": path, "entries": chunk})
-
-        return batches, doc_count
+        return batches
 
     def _chunk(self, items: list) -> list[list]:
+        """Split items into roughly equal groups (up to self._n)."""
         if not items:
             return []
         size = math.ceil(len(items) / self._n)

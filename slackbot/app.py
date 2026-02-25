@@ -24,7 +24,7 @@ slack_bot_image = (
 )
 
 # These imports register Modal functions/classes on `app` as a side effect.
-from slackbot.index_pipeline import IndexPipeline  # noqa: E402
+from slackbot.index_pipeline import IndexService  # noqa: E402
 from slackbot.ml_agent.service import get_sandbox  # noqa: E402
 from slackbot.rag.service import RagService  # noqa: E402
 from slackbot.router import Router  # noqa: E402
@@ -48,7 +48,7 @@ class Bot:
         from slack_bolt.adapter.fastapi import SlackRequestHandler
 
         self.router = Router(
-            indexer=IndexPipeline(),
+            indexer=IndexService(),
             rag=RagService(),  # type: ignore[arg-type]
             ml_sb_fn=get_sandbox,
             vol=rag_vol,

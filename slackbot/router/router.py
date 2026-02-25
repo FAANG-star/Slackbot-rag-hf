@@ -25,7 +25,7 @@ class Router:
 
         try:
             if event.get("files"):
-                self._index.handle(event["files"], channel, thread_ts, say)
+                self._index.handle(event["files"], say)
             elif message.lower().startswith("hf:"):
                 self._ml.handle(message[3:].strip(), thread_ts, say)
             else:
