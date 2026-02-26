@@ -78,11 +78,6 @@ class RagService:
 
     # -- Interface --
 
-    @modal.web_server(port=8000)
-    def serve(self):
-        """Expose vLLM's OpenAI-compatible API (subprocess already listening)."""
-        pass
-
     @modal.method()
     def query(self, message: str) -> tuple[str, list[str]]:
         """Run a RAG query. Returns (response_text, output_file_paths)."""

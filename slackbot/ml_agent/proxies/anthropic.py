@@ -24,11 +24,12 @@ def anthropic_proxy():
 
     proxy = FastAPI()
 
+    # Catch-all route: {path:path} matches any path including slashes (e.g. "v1/messages")
     @proxy.api_route("/{path:path}", methods=["POST"])
     async def forward(request: Request, path: str):
         body = await request.body()
 
-        # Forward all headers except hop-by-hop, swap in the real API key
+        # Drop headers that httpx sets automatically, swap in the real API key
         skip = {"host", "content-length"}
         headers = {k: v for k, v in request.headers.items() if k.lower() not in skip}
         headers["x-api-key"] = os.environ["ANTHROPIC_API_KEY"]
