@@ -9,8 +9,7 @@ This Slackbot allows you to deploy two secure and cost-efficient agentic workflo
 Thanks to [Modal GPU snapshots](https://modal.com/docs/guide/memory-snapshot) there are no idle compute costs. The first deploy cold-starts vLLM and takes **~5 minutes** to create the initial snapshot. Every subsequent cold start restores from the snapshot and moves weights back to GPU in **~1 second** — but GPU provisioning adds **~2 minutes** of scheduling overhead, so end-to-end cold start latency is **~3 minutes**. Warm queries (container still alive) respond in **~6 seconds**.
 
 - [Why This Exists](#why-this-exists)
-- [Features]
-(#whats-inside)
+- [Features](#whats-inside)
 - [Architecture](#architecture)
 - [Setup](#setup)
 - [Demo](#demo)
@@ -133,15 +132,15 @@ Share files directly in Slack by uploading in a channel and tagging `@rag_bot` t
 
 **How it works:** Share a file in Slack → the bot downloads it to a Modal volume → the indexer parses it into text, splits it into chunks (1024 tokens each), and embeds each chunk with [BGE-base-en-v1.5](https://huggingface.co/BAAI/bge-base-en-v1.5) on GPU → embeddings are stored in ChromaDB. When you ask a question, the ReAct agent retrieves the top-k most similar chunks, uses them as context, and generates an answer with the local LLM. Your files, embeddings, and queries never leave the GPU container.
 
-The [Simple English Wikipedia dump](https://dumps.wikimedia.org/simplewiki/latest/) is a clean benchmark. The included subset has ~48,000 articles (31 MB compressed, 54 MB uncompressed) — too much for any context window, but exactly the kind of broad knowledge base where semantic search shines.
+The [Simple English Wikipedia dump](https://dumps.wikimedia.org/simplewiki/latest/) is a clean benchmark. The included subset has ~48,000 articles (31 MB compressed, 54 MB uncompressed). Too much for any context window, but exactly the kind of broad knowledge base where semantic search comes in handy.
 
-Upload the zip to the bot in Slack — it extracts and indexes the articles automatically.
+Upload the zip to the bot in Slack and it extracts and indexes the articles automatically.
 
 **How indexing works:** The pipeline runs in three phases:
 
-1. **Scan** — compares each file's mtime and size against a manifest to find only new or changed files. Already-indexed content is skipped.
-2. **Embed** — files are distributed across 8 parallel workers on A10G GPUs, with up to 4 workers sharing each GPU concurrently (`@modal.concurrent(max_inputs=4)`). Each worker runs a [TEI](https://github.com/huggingface/text-embeddings-inference) embedding server as a sidecar subprocess, parses files, splits text into 1024-token chunks with 128-token overlap using a sentence-aware splitter, embeds each chunk with [BGE-base-en-v1.5](https://huggingface.co/BAAI/bge-base-en-v1.5), and upserts to its own ChromaDB shard.
-3. **Finalize** — worker manifests are merged into a single `manifest.json`, and ChromaDB shards are consolidated. The RAG agent reloads the index.
+1. **Scan** — compares each file's mtime and size against fingerprints stored in ChromaDB chunk metadata to find only new or changed files. Already-indexed content is skipped.
+2. **Embed** — files are distributed across 8 parallel GPU workers on A10Gs, with up to 4 workers sharing each GPU concurrently (`@modal.concurrent(max_inputs=4)`). Each worker runs a [TEI](https://github.com/huggingface/text-embeddings-inference) embedding server as a sidecar subprocess, parses files, splits text into 1024-token chunks with 128-token overlap using a sentence-aware splitter, and embeds each chunk with [BGE-base-en-v1.5](https://huggingface.co/BAAI/bge-base-en-v1.5).
+3. **Upsert** — CPU workers receive embeddings as they stream in from GPU workers and write them to ChromaDB in batches. ChromaDB is the sole source of truth for what has been indexed.
 
 The subset zip is 31 MB (54 MB uncompressed) containing ~48,000 articles, producing **53,512 searchable passages**. Indexing took **17 minutes**: ~1.5 minutes for GPU embedding across 8 parallel workers, and the remainder loading shards into ChromaDB.
 
