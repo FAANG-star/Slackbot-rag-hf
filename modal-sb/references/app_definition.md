@@ -1,8 +1,8 @@
 # Modal App — Shared Resources, Sandbox Image, and Volumes
 
-The infrastructure is split across `infra.py` (app, volumes, constants) and `sandbox.py` (image, creation). Everything else imports from `infra.py`.
+The infrastructure is split across `modal_app.py` (app, volumes, constants) and `service.py` (image, creation). Everything else imports from `modal_app.py`.
 
-## Shared Resources (infra.py)
+## Shared Resources (modal_app.py)
 
 ```python
 """Shared Modal app and volumes."""
@@ -22,23 +22,24 @@ TRACKIO_MOUNT = "/root/.cache/huggingface/trackio"
 - `trackio_vol` — dedicated volume for trackio `.db` files and `space_id` config
 - `TRACKIO_MOUNT` — matches trackio's default path so `trackio.sync()` finds `.db` files without symlinks
 
-## Sandbox Image (sandbox.py)
+## Sandbox Image (service.py)
 
 ```python
 from pathlib import Path
 import modal
-from .infra import app, data_vol, trackio_vol, TRACKIO_MOUNT
-from .proxy import anthropic_proxy
-from .trackio_sync import trackio_syncer
+from my_package.modal_app import app, data_vol, trackio_vol, TRACKIO_MOUNT
+from .proxies import anthropic_proxy, trackio_syncer
 
-ENTRYPOINT = Path(__file__).parent / "agent.py"
-CLAUDE_DIR = Path(__file__).parent / ".claude"
+SANDBOX_DIR = Path(__file__).parent / "sandbox"
+CLAUDE_DIR = Path(__file__).parent / "_claude"
+SANDBOX_NAME = "ml-agent"
 
 sandbox_image = (
-    modal.Image.debian_slim(python_version="3.11")
+    modal.Image.debian_slim(python_version="3.12")
     .apt_install("git", "curl")
     .pip_install("claude-agent-sdk", "trackio")
-    .add_local_file(ENTRYPOINT, "/agent/agent.py")
+    .env({"IMAGE_VERSION": "1"})
+    .add_local_dir(SANDBOX_DIR, "/agent")
     .add_local_dir(CLAUDE_DIR, "/app/.claude")
 )
 ```
@@ -47,17 +48,18 @@ The image is built in layers:
 
 | Layer | Purpose |
 |-------|---------|
-| `debian_slim(python_version="3.11")` | Base OS with Python |
+| `debian_slim(python_version="3.12")` | Base OS with Python |
 | `.apt_install("git", "curl")` | System tools the agent may need |
 | `.pip_install("claude-agent-sdk", "trackio")` | Claude Agent SDK + trackio for metric logging |
-| `.add_local_file(ENTRYPOINT, ...)` | Agent entrypoint script |
+| `.env({"IMAGE_VERSION": "1"})` | Cache buster — bump to force code layer rebuild (must come BEFORE `add_local_dir`) |
+| `.add_local_dir(SANDBOX_DIR, ...)` | Agent entrypoint directory |
 | `.add_local_dir(CLAUDE_DIR, ...)` | Agent instructions directory (CLAUDE.md, skills, scripts) |
 
 ### Directory Layout Inside the Container
 
 ```
 /agent/
-  agent.py                 ← executed by sb.exec()
+  agent.py                 ← executed by Sandbox.create()
 /app/                      ← workdir
   .claude/
     CLAUDE.md              ← agent reads this as project instructions
@@ -74,44 +76,50 @@ The image is built in layers:
 ## Sandbox Creation
 
 ```python
-def run_sandbox(image):
-    """Create and return a Modal sandbox with GPU, volumes, and proxy env."""
-    return modal.Sandbox.create(
-        app=app,
-        image=image,
-        workdir="/app",
-        volumes={
-            "/data": data_vol,
-            TRACKIO_MOUNT: trackio_vol,
-        },
-        env={
-            "ANTHROPIC_BASE_URL": anthropic_proxy.get_web_url(),
-            "HF_HOME": "/data/hf-cache",
-            "TRACKIO_DIR": TRACKIO_MOUNT,
-        },
-        secrets=[modal.Secret.from_name("github-secret")],
-        gpu="A10",
-        timeout=60 * 60,
-    )
-
-
-def create_sandbox():
-    trackio_syncer.spawn()
-    return run_sandbox(sandbox_image)
+def get_sandbox() -> modal.Sandbox:
+    """Get the existing ML sandbox or create a new one."""
+    try:
+        return modal.Sandbox.from_name(app_name=app.name, name=SANDBOX_NAME)
+    except modal.exception.NotFoundError:
+        trackio_syncer.spawn()
+        return modal.Sandbox.create(
+            "python", "-u", "/agent/agent.py",
+            app=app,
+            image=sandbox_image,
+            workdir="/app",
+            volumes={
+                "/data": data_vol,
+                TRACKIO_MOUNT: trackio_vol,
+            },
+            env={
+                "ANTHROPIC_BASE_URL": anthropic_proxy.get_web_url(),
+                "HF_HOME": "/data/hf-cache",
+                "TRACKIO_DIR": TRACKIO_MOUNT,
+            },
+            secrets=[modal.Secret.from_name("github-secret")],
+            gpu="A10",
+            timeout=60 * 60,
+            name=SANDBOX_NAME,
+            idle_timeout=20 * 60,
+        )
 ```
 
 Key details:
+- `from_name` — reuses an existing sandbox if one is already running (avoids duplicate GPU allocation)
+- `"python", "-u", "/agent/agent.py"` — the sandbox entrypoint command (`-u` disables output buffering)
 - `ANTHROPIC_BASE_URL` — points the Claude SDK at the proxy instead of directly at Anthropic
 - `HF_HOME` — caches models/datasets on the persistent data volume
 - `TRACKIO_DIR` — tells `trackio.init()` to write `.db` files to the shared trackio volume
 - `github-secret` — provides `GITHUB_TOKEN` so the agent can push code to git
 - `trackio_syncer.spawn()` — starts the metric syncer in the background before creating the sandbox
+- `name=SANDBOX_NAME` — names the sandbox so `from_name` can find it later
+- `idle_timeout=20 * 60` — auto-terminates after 20 minutes of no stdin activity
 
 ## How Components Import
 
 ```python
-# proxy.py, trackio_sync.py, sandbox.py
-from .infra import app, data_vol, trackio_vol, TRACKIO_MOUNT
+# proxies/anthropic.py, proxies/trackio.py, service.py
+from my_package.modal_app import app, data_vol, trackio_vol, TRACKIO_MOUNT
 ```
 
 The `app` object is shared so all functions (proxy, syncer, sandbox) run in the same Modal app context.

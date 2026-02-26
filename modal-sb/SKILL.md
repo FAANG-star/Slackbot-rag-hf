@@ -18,21 +18,24 @@ Build a secure Modal sandbox that runs a Claude agent. The agent never holds the
 ```
 ml_agent/
   __init__.py             ← module init
-  agent.py                ← runs inside sandbox, bridges stdin to Claude SDK
-  proxy.py                ← Anthropic API proxy
-  sandbox.py              ← sandbox image and creation
-  trackio_sync.py         ← metric syncer
-  .claude/
+  service.py              ← sandbox image, volumes, and creation factory
+  _claude/
     CLAUDE.md             ← agent instructions (baked into sandbox at /app/.claude/)
     scripts/              ← utility scripts the agent can call
     skills/               ← agent skills (transformers, trackio)
+  sandbox/
+    agent.py              ← runs inside sandbox, bridges stdin to Claude SDK
+  proxies/
+    __init__.py           ← re-exports anthropic_proxy, trackio_syncer
+    anthropic.py          ← Anthropic API proxy
+    trackio.py            ← metric syncer
 ```
 
 ## Reference Files
 
 | File | Purpose |
 |------|---------|
-| `references/CLAUDE.md` | Agent instructions — copy into `.claude/CLAUDE.md` when building an agent |
+| `references/CLAUDE.md` | Agent instructions — copy into `_claude/CLAUDE.md` when building an agent |
 | `references/proxy.md` | API proxy — credential isolation, streaming, header forwarding |
 | `references/app_definition.md` | Modal app — shared resources, sandbox image, volumes |
 | `references/entrypoint.md` | Claude Agent SDK entrypoint — config, response streaming, stdin protocol |
@@ -43,8 +46,8 @@ ml_agent/
 1. Read `references/proxy.md` — adapt the proxy for your API
 2. Read `references/app_definition.md` — define your app, volumes, and sandbox image
 3. Read `references/entrypoint.md` — set up the Claude Agent SDK entrypoint
-4. **Copy `references/CLAUDE.md` content into your project's `.claude/CLAUDE.md`** — this is the agent's system instructions. Customize it for your use case (environment, credentials, workflow).
-5. Copy agent skills from `references/transformers/` and `references/hugging-face-trackio/` into your `.claude/skills/`
+4. **Copy `references/CLAUDE.md` content into your project's `_claude/CLAUDE.md`** — this is the agent's system instructions. Customize it for your use case (environment, credentials, workflow).
+5. Copy agent skills from `references/transformers/` and `references/hugging-face-trackio/` into your `_claude/skills/`
 
 ## Key Patterns
 
@@ -56,9 +59,9 @@ The sandbox sends its `MODAL_SANDBOX_ID` as the API key. The proxy swaps in the 
 
 The sandbox writes trackio `.db` files to a shared volume. The agent writes a `space_id` file to tell the syncer where to upload. A separate CPU function polls the volume and syncs changed files to an HF Space. See `references/metric_syncer.md`.
 
-### Agent Instructions (.claude/)
+### Agent Instructions (_claude/)
 
-The `.claude/` directory is baked into the sandbox image at `/app/.claude/`. The SDK discovers it from the agent's `cwd="/app"`. It contains:
+The `_claude/` directory is baked into the sandbox image at `/app/.claude/`. The SDK discovers it from the agent's `cwd="/app"`. It contains:
 - `CLAUDE.md` — agent instructions (environment, credentials, workflow)
 - `skills/` — skills discovered by the SDK (transformers, trackio, etc.)
 - `scripts/` — utility scripts the agent can call (e.g. `setup_trackio.py`)
