@@ -9,7 +9,8 @@ This Slackbot allows you to deploy two secure and cost-efficient agentic workflo
 Thanks to [Modal GPU snapshots](https://modal.com/docs/guide/memory-snapshot) there are no idle compute costs. The first deploy cold-starts vLLM and takes **~5 minutes** to create the initial snapshot. Every subsequent cold start restores from the snapshot and moves weights back to GPU in **~1 second** — but GPU provisioning adds **~2 minutes** of scheduling overhead, so end-to-end cold start latency is **~3 minutes**. Warm queries (container still alive) respond in **~6 seconds**.
 
 - [Why This Exists](#why-this-exists)
-- [What's Inside](#whats-inside)
+- [Features]
+(#whats-inside)
 - [Architecture](#architecture)
 - [Setup](#setup)
 - [Demo](#demo)
@@ -30,12 +31,6 @@ The second workflow uses GPU sandboxes to securely run a Claude agent with acces
 It demonstrates how proprietary LLMs can use fine-tuned models as tools, processing data more accurately and cost-efficiently than they could otherwise. The example below shows a media processing task that would be out of reach for an LLM alone, since some data types fall outside what they're trained to handle.
 
 ---
-
-## What's Inside
-
-### Slack Bot
-
-Tag `@rag_bot` in any channel to interact. Upload files to index them, ask questions against your documents, or kick off ML training jobs — all from Slack.
 
 ### RAG Agent — Local LLM on GPU
 
