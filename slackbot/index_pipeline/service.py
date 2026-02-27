@@ -31,6 +31,7 @@ class IndexService:
 
         # Embed on GPU, upsert to ChromaDB as each embed finishes
         embeddings = self._embed_worker.embed.starmap(batches, order_outputs=False)
-        chunks = sum(self._upsert_worker.upsert.starmap(embeddings, order_outputs=False))
+        
+        chunks = sum(self._upsert_worker.upsert.remote(r) for r in embeddings)
 
         return f"Indexed {chunks:,} passages."

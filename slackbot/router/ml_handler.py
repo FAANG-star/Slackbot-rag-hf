@@ -16,6 +16,7 @@ class MlHandler:
         self._lock = threading.Lock()
 
     def handle(self, prompt: str, thread_ts: str, say) -> None:
+        """Send a prompt to the GPU sandbox and relay the response back to Slack."""
         session = f"agent-{thread_ts}".replace(".", "-")
         request = json.dumps({"message": prompt, "session": session})
 
@@ -33,10 +34,16 @@ class MlHandler:
         response = "\n".join(lines).strip()
         say(response or "(No response from agent)")
 
-    def _ensure_sandbox(self):
-        """Get or create the sandbox, replacing it if the previous one died."""
-        if self._sandbox is not None and self._sandbox.poll() is not None:
-            self._sandbox = None
+    def _is_alive(self):
+        # poll() returns None while running, exit code when done
         if self._sandbox is None:
+            return False
+        if self._sandbox.poll() is not None:
+            return False
+        return True
+
+    def _ensure_sandbox(self):
+        if not self._is_alive():
             self._sandbox = self._get_sb()
+            # Reuse a single iterator across turns to maintain position
             self._stdout = iter(self._sandbox.stdout)

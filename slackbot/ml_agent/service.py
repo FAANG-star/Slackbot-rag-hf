@@ -33,26 +33,32 @@ sandbox_image = (
 def get_sandbox() -> modal.Sandbox:
     """Get the existing ML sandbox or create a new one."""
     try:
-        return modal.Sandbox.from_name(app_name=app.name, name=SANDBOX_NAME)
+        sandbox = modal.Sandbox.from_name(app_name=app.name, name=SANDBOX_NAME)
     except modal.exception.NotFoundError:
         trackio_syncer.spawn()
-        return modal.Sandbox.create(
-            "python", "-u", "/agent/agent.py",
-            app=app,
-            image=sandbox_image,
-            workdir="/app",
-            volumes={
-                "/data": data_vol,
-                TRACKIO_MOUNT: trackio_vol,
-            },
-            env={
-                "ANTHROPIC_BASE_URL": anthropic_proxy.get_web_url(),
-                "HF_HOME": "/data/hf-cache",
-                "TRACKIO_DIR": TRACKIO_MOUNT,
-            },
-            secrets=[modal.Secret.from_name("github-secret")],
-            gpu="A10",
-            timeout=60 * 60,
-            name=SANDBOX_NAME,
-            idle_timeout=20 * 60,
-        )
+        sandbox = _create_sandbox()
+    return sandbox
+
+
+def _create_sandbox() -> modal.Sandbox:
+    sandbox = modal.Sandbox.create(
+        "python", "-u", "/agent/agent.py",
+        app=app,
+        image=sandbox_image,
+        workdir="/app",
+        volumes={
+            "/data": data_vol,
+            TRACKIO_MOUNT: trackio_vol,
+        },
+        env={
+            "ANTHROPIC_BASE_URL": anthropic_proxy.get_web_url(),
+            "HF_HOME": "/data/hf-cache",
+            "TRACKIO_DIR": TRACKIO_MOUNT,
+        },
+        secrets=[modal.Secret.from_name("github-secret")],
+        gpu="A10",
+        timeout=60 * 60,
+        name=SANDBOX_NAME,
+        idle_timeout=20 * 60,
+    )
+    return sandbox

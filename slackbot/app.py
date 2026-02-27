@@ -56,9 +56,9 @@ class Bot:
 
         # Slack retries events if no 200 within 3s — drop retries to avoid duplicate handling
         handler = SlackRequestHandler(slack_app)
-        self._app = FastAPI()
+        self._endpoint = FastAPI()
 
-        @self._app.post("/")
+        @self._endpoint.post("/")
         async def root(request: Request):
             if request.headers.get("x-slack-retry-num"):
                 return Response(status_code=200)
@@ -71,7 +71,7 @@ class Bot:
 
     @modal.asgi_app()
     def serve(self):
-        return self._app
+        return self._endpoint
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────

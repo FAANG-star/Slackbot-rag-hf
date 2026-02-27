@@ -39,7 +39,7 @@ def anthropic_proxy():
         async def pipe():
             async with httpx.AsyncClient(timeout=300.0) as client:
                 async with client.stream("POST", url, headers=headers, content=body) as resp:
-                    async for chunk in resp.aiter_bytes():
+                    async for chunk in resp.aiter_bytes(): # Stream instead of buffer 
                         yield chunk
 
         return StreamingResponse(pipe(), media_type="text/event-stream")

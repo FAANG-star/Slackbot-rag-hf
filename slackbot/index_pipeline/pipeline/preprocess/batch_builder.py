@@ -34,7 +34,11 @@ class BatchBuilder:
         return batches
 
     def _chunk(self, items: list) -> list[list]:
-        """Split items into roughly equal groups (up to self._n)."""
+        """Split items into roughly equal groups (up to self._n).
+
+        Each chunk is ceil(len(items) / n_batches) items. With 8 GPUs × 4
+        workers per GPU = 32 batches, 100 files produces 32 chunks of ~4 each.
+        """
         if not items:
             return []
         size = math.ceil(len(items) / self._n)
