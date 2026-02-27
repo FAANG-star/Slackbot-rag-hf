@@ -9,6 +9,7 @@ import asyncio
 import json
 import os
 import sys
+import traceback
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
@@ -21,17 +22,16 @@ END_SENTINEL = "__END__"
 
 
 class Agent:
-    """Wraps a single persistent ClaudeSDKClient for multi-turn conversations."""
+    """Persistent Claude SDK agent for multi-turn conversations."""
 
-    def __init__(self):
-        os.environ["ANTHROPIC_API_KEY"] = os.environ.get("MODAL_SANDBOX_ID", "")
-        self._client = None
+    def __init__(self, api_key: str):
+        self._api_key = api_key
+        self._client: ClaudeSDKClient | None = None
 
-    async def _ensure_client(self):
-        """Create the client once; reuse across all turns."""
-        if self._client is not None:
-            return
-        options = ClaudeAgentOptions(
+    async def create_client(self):
+        """Create (or recreate) the underlying Claude SDK client."""
+        os.environ["ANTHROPIC_API_KEY"] = self._api_key
+        client = ClaudeSDKClient(options=ClaudeAgentOptions(
             model="claude-sonnet-4-6",
             system_prompt={
                 "type": "preset",
@@ -43,37 +43,44 @@ class Agent:
             allowed_tools=["Read", "Write", "Bash", "Glob", "Grep"],
             permission_mode="acceptEdits",
             max_turns=100,
-        )
-        self._client = ClaudeSDKClient(options=options)
-        await self._client.__aenter__()
+        ))
+        await client.__aenter__()
+        self._client = client
 
-    async def run(self, message: str):
-        """Send a message on the persistent client and print responses."""
-        await self._ensure_client()
+    async def receive_prompt(self) -> str:
+        """Read the next JSON request from stdin and return the message."""
+        line = await asyncio.to_thread(sys.stdin.readline)
+        if not line:
+            raise EOFError
+        return json.loads(line.strip())["message"]
+
+    async def send_response(self, message: str):
+        """Forward a message to the Claude SDK and print responses to stdout."""
+        assert self._client is not None
         await self._client.query(message)
-        # Stream response blocks to stdout — ml_handler reads these lines
         async for msg in self._client.receive_response():
             if isinstance(msg, AssistantMessage):
                 for block in msg.content:
                     if isinstance(block, TextBlock):
                         print(block.text, flush=True)
-            elif isinstance(msg, ResultMessage):
-                if msg.is_error:
-                    print(f"Error: {msg.result}", flush=True)
+            elif isinstance(msg, ResultMessage) and msg.is_error:
+                print(f"Error: {msg.result}", flush=True)
+        print(END_SENTINEL, flush=True)
 
 
 async def main():
-    agent = Agent()
-    # Stdin loop: each line is a JSON request from ml_handler
-    for line in sys.stdin:
-        request = json.loads(line.strip())
+    api_key = os.environ.get("MODAL_SANDBOX_ID", "")
+    agent = Agent(api_key)
+    await agent.create_client()
+    while True:
         try:
-            await agent.run(request["message"])
-        except Exception as e:
-            print(f"Error: {e}", flush=True)
-            agent._client = None  # reset so next turn creates a fresh client
-        # Sentinel tells ml_handler this turn is done
-        print(END_SENTINEL, flush=True)
+            message = await agent.receive_prompt()
+            await agent.send_response(message)
+        except EOFError:
+            break
+        except Exception:
+            traceback.print_exc()
+            await agent.create_client()
 
 
 asyncio.run(main())
