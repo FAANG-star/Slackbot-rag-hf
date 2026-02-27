@@ -44,14 +44,12 @@ class Agent:
             permission_mode="acceptEdits",
             max_turns=100,
         ))
-        await client.__aenter__()
+        await client.__aenter__() # Persistant for multi-turn chat
         self._client = client
 
     async def receive_prompt(self) -> str:
         """Read the next JSON request from stdin and return the message."""
         line = await asyncio.to_thread(sys.stdin.readline)
-        if not line:
-            raise EOFError
         return json.loads(line.strip())["message"]
 
     async def send_response(self, message: str):
@@ -76,8 +74,6 @@ async def main():
         try:
             message = await agent.receive_prompt()
             await agent.send_response(message)
-        except EOFError:
-            break
         except Exception:
             traceback.print_exc()
             await agent.create_client()
