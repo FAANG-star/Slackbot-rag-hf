@@ -61,7 +61,7 @@ Training metrics sync to a [Trackio](https://huggingface.co/blog/trackio) dashbo
 
 Everything deploys as a single Modal app from `slackbot/app.py`.
 
-The **Slack bot** is a FastAPI + slack-bolt server that stays warm (`min_containers=1`) with a CPU memory snapshot for fast restarts. It routes messages through a `Router` that dispatches to handler classes: file uploads go to indexing, `hf:` prefixed messages go to the ML agent, and everything else goes to the RAG agent.
+The **Slack bot** is a FastAPI + slack-bot server that stays warm (`min_containers=1`) with a CPU memory snapshot for fast restarts. It routes messages through a `Router` that dispatches to handler classes: file uploads go to indexing, `hf:` prefixed messages go to the ML agent, and everything else goes to the RAG agent.
 
 The **RAG agent** runs as a Modal class on an A10G GPU. vLLM serves [Qwen3-14B-AWQ](https://huggingface.co/Qwen/Qwen3-14B-AWQ) (4-bit AWQ, ~8GB VRAM), ChromaDB stores embeddings, and a LlamaIndex ReAct agent orchestrates search and code execution. Documents never leave this container. GPU memory snapshots reduce cold starts. On first deploy the model loads into VRAM (~5 min), warms up with 3 inferences, then offloads weights to CPU RAM via vLLM's sleep mode before the snapshot is taken. Subsequent cold starts restore from the snapshot (~52s) and move weights back to GPU (~1s). Modal GPU provisioning adds ~2 minutes of scheduling overhead, so end-to-end cold start latency is ~3 minutes. Warm queries respond in ~6 seconds.
 
@@ -78,7 +78,7 @@ Two volumes provide persistence: `sandbox-rag` holds documents, the vector store
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/DeanAvI/modal-sandbox.git
+git clone https://github.com/FAANG-star/modal-sandbox.git
 cd modal-sandbox
 pip install modal
 modal setup
@@ -144,10 +144,6 @@ Upload the zip to the bot in Slack and it extracts and indexes the articles auto
 
 The subset zip is 31 MB (54 MB uncompressed) containing ~48,000 articles, producing **53,512 searchable passages**. Indexing took **17 minutes**: ~1.5 minutes for GPU embedding across 8 parallel workers, and the remainder loading shards into ChromaDB.
 
-![RAG demo](assets/rag.png)
-
-![Cold start times](assets/cold-starts.png)
-
 ### ML Training
 
 Prefix messages with `hf:` to route to the ML training agent:
@@ -156,7 +152,7 @@ Prefix messages with `hf:` to route to the ML training agent:
 
 The agent asks clarifying questions about model choice, dataset, and HuggingFace username before writing any code:
 
-![Agent suggesting models and datasets before training](assets/hf-prompt.png)
+Agent suggesting models and datasets before training
 *Agent suggests models and datasets with tradeoffs, then waits for confirmation.*
 
 Training metrics sync to a HuggingFace Space dashboard:
